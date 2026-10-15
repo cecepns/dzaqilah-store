@@ -5,18 +5,31 @@ const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'raca_cell_secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+// Folder uploads sesuai AGENTS.md (uploads-[nama-project])
+const uploadsRootDir = path.join(__dirname, 'uploads-raca-cell');
+const topupUploadDir = path.join(uploadsRootDir, 'topup');
+if (!fs.existsSync(topupUploadDir)) {
+  fs.mkdirSync(topupUploadDir, { recursive: true });
+}
+
 // Margin default hanya dipakai saat pertama kali seed database.
 // Nilai aktif selalu diambil dari tabel settings (diatur via Admin > Pengaturan Margin).
 const DEFAULT_MARGIN_PERCENT = parseFloat(process.env.MARKUP_PERCENT || '5');
+const DEFAULT_RESELLER_MARGIN_PERCENT = parseFloat(process.env.RESELLER_MARKUP_PERCENT || '2');
 let marginPercent = DEFAULT_MARGIN_PERCENT;
+let resellerMarginPercent = DEFAULT_RESELLER_MARGIN_PERCENT;
 let productMargins = new Map();
-const DIGIFLAZZ_USERNAME = process.env.DIGIFLAZZ_USERNAME || 'pahuyog19VNg';
-const DIGIFLAZZ_API_KEY = process.env.DIGIFLAZZ_API_KEY || 'aa2808be-9fab-5583-83f7-854422993780';
+const DIGIFLAZZ_USERNAME = process.env.DIGIFLAZZ_USERNAME || 'tovowaWjYdvD';
+const DIGIFLAZZ_API_KEY = process.env.DIGIFLAZZ_API_KEY || '86a9458b-3f32-58f1-85e5-eaf901bfb7ed';
 const DIGIFLAZZ_TESTING = process.env.DIGIFLAZZ_TESTING === 'true';
 const DIGIFLAZZ_BASE_URL = 'https://api.digiflazz.com/v1';
 const PRICE_LIST_CACHE_TTL = (parseInt(process.env.PRICE_LIST_CACHE_TTL, 10) || 600) * 1000;
@@ -29,6 +42,36 @@ const EWALLET_KEYWORDS = ['dana', 'ovo', 'gopay', 'go pay', 'shopeepay', 'shopee
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(uploadsRootDir));
+app.use('/api/uploads', express.static(uploadsRootDir));
+
+// Konfigurasi Multer untuk Bukti Transfer
+const topupStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, topupUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `proof-${uniqueSuffix}${ext}`);
+  },
+});
+
+const topupUploadFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Format file tidak didukung! Hanya JPG, PNG, dan WEBP yang diperbolehkan.'), false);
+  }
+};
+
+const uploadTopupProof = multer({
+  storage: topupStorage,
+  fileFilter: topupUploadFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB backend safety limit
+});
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -39,20 +82,39 @@ const normalizeSkuCode = (sku) => String(sku || '').trim().toLowerCase();
 
 const buildProductMarginsMap = (rows) =>
   new Map(
-    rows.map((row) => [normalizeSkuCode(row.buyer_sku_code), parseFloat(row.margin_percent)])
+    rows.map((row) => [
+      normalizeSkuCode(row.buyer_sku_code),
+      {
+        margin_percent: parseFloat(row.margin_percent),
+        reseller_margin_percent:
+          row.reseller_margin_percent != null && row.reseller_margin_percent !== ''
+            ? parseFloat(row.reseller_margin_percent)
+            : null,
+      },
+    ])
   );
 
-const getEffectiveMargin = (buyerSkuCode, marginsMap = productMargins) => {
+const getEffectiveMargin = (buyerSkuCode, role = 'user', marginsMap = productMargins) => {
   const key = normalizeSkuCode(buyerSkuCode);
+  const isReseller = role === 'reseller';
+
   if (key && marginsMap.has(key)) {
-    return marginsMap.get(key);
+    const custom = marginsMap.get(key);
+    if (isReseller) {
+      if (custom && custom.reseller_margin_percent != null) {
+        return custom.reseller_margin_percent;
+      }
+      return resellerMarginPercent;
+    }
+    return custom ? custom.margin_percent : marginPercent;
   }
-  return marginPercent;
+
+  return isReseller ? resellerMarginPercent : marginPercent;
 };
 
-const calcSellingPrice = (price, buyerSkuCode, marginsMap = productMargins) => {
+const calcSellingPrice = (price, buyerSkuCode, role = 'user', marginsMap = productMargins) => {
   const base = parseFloat(price) || 0;
-  const margin = getEffectiveMargin(buyerSkuCode, marginsMap);
+  const margin = getEffectiveMargin(buyerSkuCode, role, marginsMap);
   return Math.ceil(base + (base * margin) / 100);
 };
 
@@ -81,21 +143,27 @@ const normalizeWhatsApp = (phone) => {
 const loadMarginPercent = async () => {
   try {
     const [rows] = await pool.execute(
-      "SELECT setting_value FROM settings WHERE setting_key = 'margin_percent' LIMIT 1"
+      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('margin_percent', 'margin_reseller_percent')"
     );
-    if (rows.length) {
-      marginPercent = parseFloat(rows[0].setting_value) || DEFAULT_MARGIN_PERCENT;
-    }
-  } catch {
+    rows.forEach((row) => {
+      if (row.setting_key === 'margin_percent') {
+        marginPercent = parseFloat(row.setting_value) || DEFAULT_MARGIN_PERCENT;
+      } else if (row.setting_key === 'margin_reseller_percent') {
+        resellerMarginPercent = parseFloat(row.setting_value) || DEFAULT_RESELLER_MARGIN_PERCENT;
+      }
+    });
+  } catch (err) {
+    console.error('Failed to load margin settings:', err.message);
     marginPercent = DEFAULT_MARGIN_PERCENT;
+    resellerMarginPercent = DEFAULT_RESELLER_MARGIN_PERCENT;
   }
-  return marginPercent;
+  return { marginPercent, resellerMarginPercent };
 };
 
 const loadProductMargins = async () => {
   try {
     const [rows] = await pool.execute(
-      'SELECT buyer_sku_code, margin_percent FROM product_margins'
+      'SELECT buyer_sku_code, margin_percent, reseller_margin_percent FROM product_margins'
     );
     productMargins = buildProductMarginsMap(rows);
   } catch (err) {
@@ -358,13 +426,14 @@ const matchPascaService = (product, service) => {
   return classifyPascaService(product) === service;
 };
 
-const mapPrepaidProducts = (products, marginsMap = productMargins) =>
+const mapPrepaidProducts = (products, marginsMap = productMargins, role = 'user') =>
   products
     .filter((p) => p.buyer_product_status && p.seller_product_status)
     .map((p) => {
       const skuKey = normalizeSkuCode(p.buyer_sku_code);
+      const custom = marginsMap.get(skuKey);
       const hasCustomMargin = marginsMap.has(skuKey);
-      const effectiveMargin = getEffectiveMargin(p.buyer_sku_code, marginsMap);
+      const effectiveMargin = getEffectiveMargin(p.buyer_sku_code, role, marginsMap);
       return {
         buyer_sku_code: p.buyer_sku_code,
         product_name: p.product_name,
@@ -372,22 +441,26 @@ const mapPrepaidProducts = (products, marginsMap = productMargins) =>
         brand: p.brand,
         type: p.type,
         price: parseFloat(p.price),
-        selling_price: calcSellingPrice(p.price, p.buyer_sku_code, marginsMap),
+        selling_price: calcSellingPrice(p.price, p.buyer_sku_code, role, marginsMap),
+        member_price: calcSellingPrice(p.price, p.buyer_sku_code, 'user', marginsMap),
+        reseller_price: calcSellingPrice(p.price, p.buyer_sku_code, 'reseller', marginsMap),
         margin_percent: effectiveMargin,
-        custom_margin_percent: hasCustomMargin ? marginsMap.get(skuKey) : null,
+        custom_margin_percent: custom ? custom.margin_percent : null,
+        custom_reseller_margin_percent: custom ? custom.reseller_margin_percent : null,
         has_custom_margin: hasCustomMargin,
         desc: p.desc,
         is_pasca: false,
       };
     });
 
-const mapPascaProducts = (products, marginsMap = productMargins) =>
+const mapPascaProducts = (products, marginsMap = productMargins, role = 'user') =>
   products
     .filter((p) => isPascaListed(p))
     .map((p) => {
       const skuKey = normalizeSkuCode(p.buyer_sku_code);
+      const custom = marginsMap.get(skuKey);
       const hasCustomMargin = marginsMap.has(skuKey);
-      const effectiveMargin = getEffectiveMargin(p.buyer_sku_code, marginsMap);
+      const effectiveMargin = getEffectiveMargin(p.buyer_sku_code, role, marginsMap);
       return {
         buyer_sku_code: p.buyer_sku_code,
         product_name: p.product_name,
@@ -396,7 +469,8 @@ const mapPascaProducts = (products, marginsMap = productMargins) =>
         admin: parseFloat(p.admin) || 0,
         commission: parseFloat(p.commission) || 0,
         margin_percent: effectiveMargin,
-        custom_margin_percent: hasCustomMargin ? marginsMap.get(skuKey) : null,
+        custom_margin_percent: custom ? custom.margin_percent : null,
+        custom_reseller_margin_percent: custom ? custom.reseller_margin_percent : null,
         has_custom_margin: hasCustomMargin,
         desc: p.desc,
         is_pasca: true,
@@ -429,8 +503,8 @@ const processDigiflazzPasca = async (command, refId, buyerSkuCode, customerNo) =
   return callDigiflazz('/transaction', body);
 };
 
-const calcPascaSellingPrice = (digiflazzSellingPrice, buyerSkuCode, marginsMap = productMargins) =>
-  calcSellingPrice(digiflazzSellingPrice, buyerSkuCode, marginsMap);
+const calcPascaSellingPrice = (digiflazzSellingPrice, buyerSkuCode, role = 'user', marginsMap = productMargins) =>
+  calcSellingPrice(digiflazzSellingPrice, buyerSkuCode, role, marginsMap);
 
 const mapDigiflazzStatus = (status) => {
   const s = (status || '').toLowerCase();
@@ -551,7 +625,7 @@ const initDatabase = async () => {
         email VARCHAR(150) NOT NULL UNIQUE,
         phone VARCHAR(20) NOT NULL,
         password VARCHAR(255) NOT NULL,
-        role ENUM('owner', 'admin', 'user') NOT NULL DEFAULT 'user',
+        role ENUM('owner', 'admin', 'reseller', 'user') NOT NULL DEFAULT 'user',
         balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
         status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -630,6 +704,16 @@ const initDatabase = async () => {
       );
     }
 
+    const [resellerMarginSetting] = await connection.query(
+      "SELECT id FROM settings WHERE setting_key = 'margin_reseller_percent' LIMIT 1"
+    );
+    if (!resellerMarginSetting.length) {
+      await connection.query(
+        "INSERT INTO settings (setting_key, setting_value) VALUES ('margin_reseller_percent', ?)",
+        [String(DEFAULT_RESELLER_MARGIN_PERCENT)]
+      );
+    }
+
     const [waSetting] = await connection.query(
       "SELECT id FROM settings WHERE setting_key = 'admin_whatsapp' LIMIT 1"
     );
@@ -645,6 +729,7 @@ const initDatabase = async () => {
         user_id INT NOT NULL,
         amount DECIMAL(15, 2) NOT NULL,
         note TEXT,
+        proof_image VARCHAR(255) NULL,
         status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
         admin_note TEXT,
         processed_by INT,
@@ -697,6 +782,22 @@ const initDatabase = async () => {
       if (err.code !== 'ER_DUP_FIELDNAME') throw err;
     }
 
+    try {
+      await connection.query(
+        "ALTER TABLE users MODIFY COLUMN role ENUM('owner', 'admin', 'reseller', 'user') NOT NULL DEFAULT 'user'"
+      );
+    } catch (err) {
+      console.error('Failed to update users role enum:', err.message);
+    }
+
+    try {
+      await connection.query(
+        'ALTER TABLE topup_requests ADD COLUMN proof_image VARCHAR(255) NULL AFTER note'
+      );
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+    }
+
     await connection.query(`
       CREATE TABLE IF NOT EXISTS product_margins (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -704,6 +805,7 @@ const initDatabase = async () => {
         product_name VARCHAR(200) NOT NULL,
         transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid',
         margin_percent DECIMAL(5, 2) NOT NULL,
+        reseller_margin_percent DECIMAL(5, 2) NULL DEFAULT NULL,
         updated_by INT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -713,12 +815,20 @@ const initDatabase = async () => {
       )
     `);
 
+    try {
+      await connection.query(
+        'ALTER TABLE product_margins ADD COLUMN reseller_margin_percent DECIMAL(5, 2) NULL DEFAULT NULL AFTER margin_percent'
+      );
+    } catch (err) {
+      if (err.code !== 'ER_DUP_FIELDNAME') console.error('Failed to add reseller_margin_percent to product_margins:', err.message);
+    }
+
     const [owners] = await connection.query("SELECT id FROM users WHERE role = 'owner' LIMIT 1");
     if (!owners.length) {
       const hashed = await bcrypt.hash('password123', 10);
       await connection.query(
         "INSERT INTO users (name, email, phone, password, role, balance, status) VALUES (?, ?, ?, ?, 'owner', 0, 'active')",
-        ['Owner Raca Cell', 'owner@racacell.com', '081234567890', hashed]
+        ['Owner Dzaqilah Store', 'owner@racacell.com', '081234567890', hashed]
       );
       console.log('Default owner created: owner@racacell.com / password123');
     }
@@ -876,7 +986,10 @@ app.post('/api/users', authenticate, authorize('owner', 'admin'), async (req, re
     if (!name || !email || !phone || !password) {
       return res.status(400).json({ success: false, message: 'Semua field wajib diisi' });
     }
-    if (!['user', 'admin'].includes(role) && req.user.role !== 'owner') {
+    if (!['user', 'reseller', 'admin'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role tidak valid' });
+    }
+    if (role === 'admin' && req.user.role !== 'owner') {
       return res.status(403).json({ success: false, message: 'Hanya owner yang bisa membuat admin' });
     }
     if (role === 'owner') {
@@ -925,7 +1038,16 @@ app.put('/api/users/:id', authenticate, authorize('owner', 'admin'), async (req,
     if (name) { updates.push('name = ?'); params.push(name.trim()); }
     if (phone) { updates.push('phone = ?'); params.push(phone.trim()); }
     if (status) { updates.push('status = ?'); params.push(status); }
-    if (role && req.user.role === 'owner' && role !== 'owner') {
+    if (role) {
+      if (role === 'owner') {
+        return res.status(403).json({ success: false, message: 'Tidak bisa mengubah menjadi role owner' });
+      }
+      if (role === 'admin' && req.user.role !== 'owner') {
+        return res.status(403).json({ success: false, message: 'Hanya owner yang bisa mengubah user menjadi admin' });
+      }
+      if (!['user', 'reseller', 'admin'].includes(role)) {
+        return res.status(400).json({ success: false, message: 'Role tidak valid' });
+      }
       updates.push('role = ?');
       params.push(role);
     }
@@ -1081,7 +1203,7 @@ app.get('/api/balance/history', authenticate, async (req, res) => {
     const { page, limit, offset } = getPagination(req.query);
     const search = req.query.search?.trim() || '';
     const type = req.query.type?.trim() || '';
-    const userId = req.user.role === 'user' ? req.user.id : req.query.user_id || null;
+    const userId = !['owner', 'admin'].includes(req.user.role) ? req.user.id : req.query.user_id || null;
 
     let where = 'WHERE 1=1';
     const params = [];
@@ -1154,7 +1276,7 @@ app.get('/api/products/prepaid', authenticate, async (req, res) => {
     if (type) raw = raw.filter((p) => p.type === type);
 
     const marginsMap = await fetchProductMarginsMap();
-    let data = mapPrepaidProducts(raw, marginsMap);
+    let data = mapPrepaidProducts(raw, marginsMap, req.user.role);
 
     if (search) {
       data = data.filter(
@@ -1173,7 +1295,10 @@ app.get('/api/products/prepaid', authenticate, async (req, res) => {
       success: true,
       data: paginated,
       pagination: paginationMeta(page, limit, total),
-      margin_percent: marginPercent,
+      margin_percent: req.user.role === 'reseller' ? resellerMarginPercent : marginPercent,
+      member_margin_percent: marginPercent,
+      reseller_margin_percent: resellerMarginPercent,
+      user_role: req.user.role,
     });
   } catch (err) {
     console.error('Digiflazz price-list error:', err.message, err.digiflazzResponse || '');
@@ -1204,7 +1329,7 @@ app.get('/api/products/pasca', authenticate, async (req, res) => {
     if (brand) raw = raw.filter((p) => p.brand === brand);
 
     const marginsMap = await fetchProductMarginsMap();
-    let data = mapPascaProducts(raw, marginsMap);
+    let data = mapPascaProducts(raw, marginsMap, req.user.role);
 
     if (search) {
       data = data.filter(
@@ -1223,7 +1348,10 @@ app.get('/api/products/pasca', authenticate, async (req, res) => {
       success: true,
       data: paginated,
       pagination: paginationMeta(page, limit, total),
-      margin_percent: marginPercent,
+      margin_percent: req.user.role === 'reseller' ? resellerMarginPercent : marginPercent,
+      member_margin_percent: marginPercent,
+      reseller_margin_percent: resellerMarginPercent,
+      user_role: req.user.role,
     });
   } catch (err) {
     console.error('Digiflazz pasca price-list error:', err.message, err.digiflazzResponse || '');
@@ -1354,9 +1482,14 @@ app.get('/api/products/margins', authenticate, authorize('owner', 'admin'), asyn
       data: rows.map((row) => ({
         ...row,
         margin_percent: parseFloat(row.margin_percent),
+        reseller_margin_percent:
+          row.reseller_margin_percent != null && row.reseller_margin_percent !== ''
+            ? parseFloat(row.reseller_margin_percent)
+            : null,
       })),
       pagination: paginationMeta(page, limit, total),
       global_margin_percent: marginPercent,
+      global_reseller_margin_percent: resellerMarginPercent,
     });
   } catch (err) {
     console.error(err);
@@ -1367,37 +1500,48 @@ app.get('/api/products/margins', authenticate, authorize('owner', 'admin'), asyn
 app.put('/api/products/margins/:buyer_sku_code', authenticate, authorize('owner', 'admin'), async (req, res) => {
   try {
     const buyerSkuCode = normalizeSkuCode(decodeURIComponent(req.params.buyer_sku_code || ''));
-    const { margin_percent, product_name, transaction_type } = req.body;
+    const { margin_percent, reseller_margin_percent, product_name, transaction_type } = req.body;
     const value = parseFloat(margin_percent);
+    const resellerValue =
+      reseller_margin_percent !== undefined && reseller_margin_percent !== null && reseller_margin_percent !== ''
+        ? parseFloat(reseller_margin_percent)
+        : null;
 
     if (!buyerSkuCode) {
       return res.status(400).json({ success: false, message: 'SKU produk wajib diisi' });
     }
     if (Number.isNaN(value) || value < 0 || value > 100) {
-      return res.status(400).json({ success: false, message: 'Margin harus antara 0% - 100%' });
+      return res.status(400).json({ success: false, message: 'Margin member harus antara 0% - 100%' });
+    }
+    if (resellerValue !== null && (Number.isNaN(resellerValue) || resellerValue < 0 || resellerValue > 100)) {
+      return res.status(400).json({ success: false, message: 'Margin reseller harus antara 0% - 100%' });
     }
 
     const type = transaction_type === 'pasca' ? 'pasca' : 'prepaid';
     const name = (product_name || buyerSkuCode).trim().slice(0, 200);
 
     await pool.execute(
-      `INSERT INTO product_margins (buyer_sku_code, product_name, transaction_type, margin_percent, updated_by)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO product_margins (buyer_sku_code, product_name, transaction_type, margin_percent, reseller_margin_percent, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          product_name = VALUES(product_name),
          transaction_type = VALUES(transaction_type),
          margin_percent = VALUES(margin_percent),
+         reseller_margin_percent = VALUES(reseller_margin_percent),
          updated_by = VALUES(updated_by)`,
-      [buyerSkuCode, name, type, value, req.user.id]
+      [buyerSkuCode, name, type, value, resellerValue, req.user.id]
     );
 
-    productMargins.set(buyerSkuCode, value);
+    productMargins.set(buyerSkuCode, {
+      margin_percent: value,
+      reseller_margin_percent: resellerValue,
+    });
 
     await logActivity(
       req.user.id,
       'update_product_margin',
-      `Mengatur margin produk ${name} (${buyerSkuCode}) menjadi ${value}%`,
-      { buyer_sku_code: buyerSkuCode, margin_percent: value, transaction_type: type },
+      `Mengatur margin produk ${name} (${buyerSkuCode}): Member ${value}%, Reseller ${resellerValue ?? resellerMarginPercent}%`,
+      { buyer_sku_code: buyerSkuCode, margin_percent: value, reseller_margin_percent: resellerValue, transaction_type: type },
       req.ip
     );
 
@@ -1409,6 +1553,7 @@ app.put('/api/products/margins/:buyer_sku_code', authenticate, authorize('owner'
         product_name: name,
         transaction_type: type,
         margin_percent: value,
+        reseller_margin_percent: resellerValue,
         has_custom_margin: true,
       },
     });
@@ -1474,7 +1619,7 @@ app.post('/api/transactions/topup', authenticate, async (req, res) => {
 
     const basePrice = parseFloat(price);
     const marginsMap = await fetchProductMarginsMap();
-    const sellPrice = calcSellingPrice(basePrice, buyer_sku_code, marginsMap);
+    const sellPrice = calcSellingPrice(basePrice, buyer_sku_code, req.user.role, marginsMap);
 
     await connection.beginTransaction();
 
@@ -1588,7 +1733,7 @@ app.post('/api/transactions/pasca/inquiry', authenticate, async (req, res) => {
 
     const basePrice = parseFloat(data.price) || parseFloat(data.selling_price) || 0;
     const marginsMap = await fetchProductMarginsMap();
-    const sellingPrice = calcPascaSellingPrice(data.selling_price || data.price, buyer_sku_code, marginsMap);
+    const sellingPrice = calcPascaSellingPrice(data.selling_price || data.price, buyer_sku_code, req.user.role, marginsMap);
 
     await pool.execute(
       `INSERT INTO pasca_inquiries
@@ -1789,7 +1934,8 @@ app.get('/api/transactions', authenticate, async (req, res) => {
     const { page, limit, offset } = getPagination(req.query);
     const search = req.query.search?.trim() || '';
     const status = req.query.status?.trim() || '';
-    const userId = ['owner', 'admin'].includes(req.user.role) ? req.query.user_id || null : req.user.id;
+    const isAdmin = ['owner', 'admin'].includes(req.user.role);
+    const userId = isAdmin ? req.query.user_id || null : req.user.id;
 
     let where = 'WHERE 1=1';
     const params = [];
@@ -1797,9 +1943,6 @@ app.get('/api/transactions', authenticate, async (req, res) => {
     if (userId) {
       where += ' AND t.user_id = ?';
       params.push(userId);
-    } else if (req.user.role === 'user') {
-      where += ' AND t.user_id = ?';
-      params.push(req.user.id);
     }
     if (status) {
       where += ' AND t.status = ?';
@@ -1831,6 +1974,7 @@ app.get('/api/transactions', authenticate, async (req, res) => {
 
 app.get('/api/transactions/:id', authenticate, async (req, res) => {
   try {
+    const isAdmin = ['owner', 'admin'].includes(req.user.role);
     const [rows] = await pool.execute(
       `SELECT t.*, u.name as user_name FROM transactions t JOIN users u ON t.user_id = u.id WHERE t.id = ?`,
       [req.params.id]
@@ -1838,7 +1982,7 @@ app.get('/api/transactions/:id', authenticate, async (req, res) => {
     if (!rows.length) {
       return res.status(404).json({ success: false, message: 'Transaksi tidak ditemukan' });
     }
-    if (req.user.role === 'user' && rows[0].user_id !== req.user.id) {
+    if (!isAdmin && rows[0].user_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
     res.json({ success: true, data: rows[0] });
@@ -1850,13 +1994,14 @@ app.get('/api/transactions/:id', authenticate, async (req, res) => {
 app.post('/api/transactions/:id/check-status', authenticate, async (req, res) => {
   const connection = await pool.getConnection();
   try {
+    const isAdmin = ['owner', 'admin'].includes(req.user.role);
     const [rows] = await connection.execute('SELECT * FROM transactions WHERE id = ?', [req.params.id]);
     if (!rows.length) {
       return res.status(404).json({ success: false, message: 'Transaksi tidak ditemukan' });
     }
 
     const transaction = rows[0];
-    if (req.user.role === 'user' && transaction.user_id !== req.user.id) {
+    if (!isAdmin && transaction.user_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Akses ditolak' });
     }
     if (transaction.status !== 'pending') {
@@ -1869,16 +2014,16 @@ app.post('/api/transactions/:id/check-status', authenticate, async (req, res) =>
     const isPasca = transaction.transaction_type === 'pasca';
     const digiflazzResult = isPasca
       ? await processDigiflazzPasca(
-          'pay-pasca',
-          transaction.ref_id,
-          transaction.buyer_sku_code,
-          transaction.customer_no
-        )
+        'pay-pasca',
+        transaction.ref_id,
+        transaction.buyer_sku_code,
+        transaction.customer_no
+      )
       : await processDigiflazzTopup(
-          transaction.ref_id,
-          transaction.buyer_sku_code,
-          transaction.customer_no
-        );
+        transaction.ref_id,
+        transaction.buyer_sku_code,
+        transaction.customer_no
+      );
     const data = digiflazzResult?.data;
     if (!data) {
       return res.status(502).json({
@@ -2057,7 +2202,9 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
     const isAdmin = ['owner', 'admin'].includes(req.user.role);
 
     if (isAdmin) {
-      const [userCount] = await pool.execute('SELECT COUNT(*) as total FROM users WHERE role = ?', ['user']);
+      const [userCount] = await pool.execute("SELECT COUNT(*) as total FROM users WHERE role IN ('user', 'reseller')");
+      const [resellerCount] = await pool.execute("SELECT COUNT(*) as total FROM users WHERE role = 'reseller'");
+      const [memberCount] = await pool.execute("SELECT COUNT(*) as total FROM users WHERE role = 'user'");
       const [txToday] = await pool.execute(
         "SELECT COUNT(*) as total, COALESCE(SUM(selling_price), 0) as revenue FROM transactions WHERE DATE(created_at) = CURDATE() AND status != 'failed'"
       );
@@ -2071,6 +2218,8 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
         success: true,
         data: {
           total_users: userCount[0].total,
+          total_resellers: resellerCount[0].total,
+          total_members: memberCount[0].total,
           transactions_today: txToday[0].total,
           revenue_today: parseFloat(txToday[0].revenue),
           transactions_success: txSuccess[0].total,
@@ -2101,15 +2250,28 @@ app.get('/api/dashboard/stats', authenticate, async (req, res) => {
 
 // ─── Topup Request Routes ──────────────────────────────────────────────────
 
-app.post('/api/topup-requests', authenticate, async (req, res) => {
+app.post('/api/topup-requests', authenticate, (req, res, next) => {
+  uploadTopupProof.single('proof')(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'Ukuran bukti transfer maksimal 2MB' });
+      }
+      return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file bukti transfer' });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     const { amount, note } = req.body;
     const amt = parseFloat(amount);
+    const proofImage = req.file ? `/uploads/topup/${req.file.filename}` : null;
 
     if (!amt || amt <= 0) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       return res.status(400).json({ success: false, message: 'Jumlah topup harus lebih dari 0' });
     }
     if (amt < 10000) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       return res.status(400).json({ success: false, message: 'Minimum request topup Rp 10.000' });
     }
 
@@ -2118,6 +2280,7 @@ app.post('/api/topup-requests', authenticate, async (req, res) => {
       [req.user.id]
     );
     if (pending.length) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
       return res.status(400).json({
         success: false,
         message: 'Anda masih memiliki request topup yang menunggu persetujuan admin',
@@ -2125,24 +2288,25 @@ app.post('/api/topup-requests', authenticate, async (req, res) => {
     }
 
     const [result] = await pool.execute(
-      'INSERT INTO topup_requests (user_id, amount, note) VALUES (?, ?, ?)',
-      [req.user.id, amt, note?.trim() || null]
+      'INSERT INTO topup_requests (user_id, amount, note, proof_image) VALUES (?, ?, ?, ?)',
+      [req.user.id, amt, note?.trim() || null, proofImage]
     );
 
     await logActivity(
       req.user.id,
       'topup_request',
-      `Request topup saldo Rp ${amt.toLocaleString('id-ID')}`,
-      { requestId: result.insertId, amount: amt },
+      `Request topup saldo Rp ${amt.toLocaleString('id-ID')}${proofImage ? ' (dengan bukti transfer)' : ''}`,
+      { requestId: result.insertId, amount: amt, hasProof: Boolean(proofImage) },
       req.ip
     );
 
     res.status(201).json({
       success: true,
       message: 'Request topup berhasil dikirim. Tunggu konfirmasi admin.',
-      data: { id: result.insertId, amount: amt, status: 'pending' },
+      data: { id: result.insertId, amount: amt, status: 'pending', proof_image: proofImage },
     });
   } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     console.error(err);
     res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
@@ -2308,7 +2472,7 @@ app.get('/api/settings/contact', authenticate, async (req, res) => {
       data: {
         admin_whatsapp: adminWhatsapp,
         whatsapp_url: normalized
-          ? `https://wa.me/${normalized}?text=${encodeURIComponent('Halo Admin Raca Cell, saya butuh bantuan.')}`
+          ? `https://wa.me/${normalized}?text=${encodeURIComponent('Halo Admin Dzaqilah Store, saya butuh bantuan.')}`
           : null,
       },
     });
@@ -2351,16 +2515,26 @@ app.put('/api/settings/whatsapp', authenticate, authorize('owner', 'admin'), asy
 app.get('/api/settings/margin', authenticate, async (req, res) => {
   res.json({
     success: true,
-    data: { margin_percent: marginPercent },
+    data: {
+      margin_percent: marginPercent,
+      margin_reseller_percent: resellerMarginPercent,
+    },
   });
 });
 
 app.put('/api/settings/margin', authenticate, authorize('owner', 'admin'), async (req, res) => {
   try {
     const value = parseFloat(req.body.margin_percent);
+    const resellerValue =
+      req.body.margin_reseller_percent !== undefined && req.body.margin_reseller_percent !== null && req.body.margin_reseller_percent !== ''
+        ? parseFloat(req.body.margin_reseller_percent)
+        : null;
 
     if (Number.isNaN(value) || value < 0 || value > 100) {
-      return res.status(400).json({ success: false, message: 'Margin harus antara 0% - 100%' });
+      return res.status(400).json({ success: false, message: 'Margin member harus antara 0% - 100%' });
+    }
+    if (resellerValue !== null && (Number.isNaN(resellerValue) || resellerValue < 0 || resellerValue > 100)) {
+      return res.status(400).json({ success: false, message: 'Margin reseller harus antara 0% - 100%' });
     }
 
     await pool.execute(
@@ -2369,22 +2543,33 @@ app.put('/api/settings/margin', authenticate, authorize('owner', 'admin'), async
        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
       [String(value), req.user.id]
     );
-
-    const oldMargin = marginPercent;
     marginPercent = value;
+
+    if (resellerValue !== null) {
+      await pool.execute(
+        `INSERT INTO settings (setting_key, setting_value, updated_by)
+         VALUES ('margin_reseller_percent', ?, ?)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_by = VALUES(updated_by)`,
+        [String(resellerValue), req.user.id]
+      );
+      resellerMarginPercent = resellerValue;
+    }
 
     await logActivity(
       req.user.id,
       'update_margin',
-      `Mengubah margin dari ${oldMargin}% menjadi ${value}%`,
-      { old_margin: oldMargin, new_margin: value },
+      `Mengubah margin: Member ${marginPercent}%, Reseller ${resellerMarginPercent}%`,
+      { margin_percent: marginPercent, margin_reseller_percent: resellerMarginPercent },
       req.ip
     );
 
     res.json({
       success: true,
       message: 'Margin berhasil diperbarui',
-      data: { margin_percent: marginPercent },
+      data: {
+        margin_percent: marginPercent,
+        margin_reseller_percent: resellerMarginPercent,
+      },
     });
   } catch (err) {
     console.error(err);
@@ -2395,7 +2580,7 @@ app.put('/api/settings/margin', authenticate, authorize('owner', 'admin'), async
 // ─── Health Check ──────────────────────────────────────────────────────────
 
 app.get('/api/health', (_, res) => {
-  res.json({ success: true, message: 'Raca Cell API is running' });
+  res.json({ success: true, message: 'Dzaqilah Store API is running' });
 });
 
 // ─── Start Server ──────────────────────────────────────────────────────────
@@ -2403,7 +2588,7 @@ app.get('/api/health', (_, res) => {
 initDatabase()
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`Raca Cell API running on port ${PORT}`);
+      console.log(`Dzaqilah Store API running on port ${PORT}`);
     });
   })
   .catch((err) => {

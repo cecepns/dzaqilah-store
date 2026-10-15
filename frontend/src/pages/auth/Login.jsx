@@ -39,8 +39,8 @@ const Login = () => {
         <div className="text-center mb-8">
           <img
             src={logo}
-            alt="Raca Cell"
-            className="w-32 h-auto mx-auto mb-3 object-contain"
+            alt="Dzaqilah Store"
+            className="w-44 h-auto mx-auto mb-3 object-contain"
           />
           <p className="text-gray-500 text-sm">PPOB Pulsa & Kuota</p>
         </div>

@@ -14,7 +14,7 @@ const ReceiptPreview = ({ transaction, partnerName, id = 'receipt-preview' }) =>
       <div className="center text-center">
         <p className="title font-bold text-sm">{storeName.toUpperCase()}</p>
         {!hasPartner && (
-          <p className="subtitle text-[10px] text-gray-600">Raca Cell PPOB</p>
+          <p className="subtitle text-[10px] text-gray-600">Dzaqilah Store PPOB</p>
         )}
       </div>
       <div className="divider border-t border-dashed border-black my-2" />

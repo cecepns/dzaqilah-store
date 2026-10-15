@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, MessageCircle, PlusCircle, Store, Save, KeyRound, Package } from 'lucide-react';
+import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, PlusCircle, Store, Save, KeyRound, Package } from 'lucide-react';
 import { get, post, getErrorMessage } from '../utils/request';
 import { API_ENDPOINTS } from '../utils/endpoints';
 import toast from 'react-hot-toast';
@@ -8,11 +8,18 @@ import Header from '../components/layout/Header';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/request';
 import Modal from '../components/ui/Modal';
+import WhatsAppIcon from '../components/ui/WhatsAppIcon';
 
-const roleLabels = { owner: 'Owner', admin: 'Admin', user: 'User' };
+const roleLabels = { owner: 'Owner', admin: 'Admin', reseller: 'Reseller', user: 'Member' };
+const roleBadgeStyles = {
+  owner: 'bg-purple-100 text-purple-700',
+  admin: 'bg-blue-100 text-blue-700',
+  reseller: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+  user: 'bg-gray-100 text-gray-700',
+};
 
 const Profile = () => {
-  const { user, logout, isAdmin, updatePartnerName } = useAuth();
+  const { user, logout, isAdmin, isReseller, updatePartnerName } = useAuth();
   const navigate = useNavigate();
   const [contact, setContact] = useState(null);
   const [partnerName, setPartnerName] = useState(user?.partner_name || '');
@@ -113,10 +120,13 @@ const Profile = () => {
               <User className="w-8 h-8 text-primary-600" />
             </div>
             <div>
-              <h2 className="font-bold text-gray-900">{user?.name}</h2>
-              <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-700 text-xs rounded-full font-medium mt-1">
-                {roleLabels[user?.role]}
+              <h2 className="font-bold text-gray-900 text-base">{user?.name}</h2>
+              <span className={`inline-block px-2.5 py-0.5 text-xs rounded-full font-semibold mt-1 ${roleBadgeStyles[user?.role] || roleBadgeStyles.user}`}>
+                {user?.role === 'reseller' && '💎 '}{roleLabels[user?.role] || 'Member'}
               </span>
+              {isReseller && (
+                <p className="text-[11px] text-emerald-600 font-medium mt-1">Harga khusus reseller aktif</p>
+              )}
             </div>
           </div>
 
@@ -184,9 +194,9 @@ const Profile = () => {
             href={contact.whatsapp_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full flex items-center justify-center gap-2 bg-green-500 text-white py-3 rounded-xl font-medium hover:bg-green-600"
+            className="w-full flex items-center justify-center gap-2 bg-green-500 text-white py-3 rounded-xl font-medium hover:bg-green-600 transition-colors shadow-sm"
           >
-            <MessageCircle className="w-5 h-5" />
+            <WhatsAppIcon className="w-5 h-5" />
             Hubungi Admin via WhatsApp
           </a>
         )}

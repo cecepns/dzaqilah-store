@@ -1,6 +1,6 @@
 {
-  "name": "Raca Cell PPOB",
-  "short_name": "Raca Cell",
+  "name": "Dzaqilah Store PPOB",
+  "short_name": "Dzaqilah Store",
   "description": "Aplikasi PPOB Pulsa & Kuota",
   "theme_color": "#2563eb",
   "background_color": "#ffffff",
@@ -8,7 +8,15 @@
   "orientation": "portrait",
   "start_url": "/",
   "icons": [
-    { "src": "/favicon.svg", "sizes": "192x192", "type": "image/svg+xml" },
-    { "src": "/favicon.svg", "sizes": "512x512", "type": "image/svg+xml" }
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
   ]
 }

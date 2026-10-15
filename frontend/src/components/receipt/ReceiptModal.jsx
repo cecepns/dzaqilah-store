@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Printer, Download, MessageCircle, Image, Loader2 } from 'lucide-react';
+import { Printer, Download, Image, Loader2 } from 'lucide-react';
 import Modal from '../ui/Modal';
+import WhatsAppIcon from '../ui/WhatsAppIcon';
 import ReceiptPreview from './ReceiptPreview';
 import {
   buildReceiptWhatsAppMessage,
@@ -62,7 +63,7 @@ const ReceiptModal = ({ isOpen, onClose, transaction, partnerName }) => {
   const actions = [
     { key: 'print', icon: Printer, label: 'Cetak Struk', onClick: handlePrint, color: 'bg-gray-900 text-white hover:bg-gray-800' },
     { key: 'download', icon: Download, label: 'Unduh Gambar', onClick: handleDownload, color: 'bg-primary-600 text-white hover:bg-primary-700' },
-    { key: 'wa-text', icon: MessageCircle, label: 'Bagikan Teks WA', onClick: handleShareText, color: 'bg-green-500 text-white hover:bg-green-600' },
+    { key: 'wa-text', icon: WhatsAppIcon, label: 'Bagikan Teks WA', onClick: handleShareText, color: 'bg-green-500 text-white hover:bg-green-600' },
     { key: 'share-image', icon: Image, label: 'Bagikan Gambar WA', onClick: handleShareImage, color: 'bg-green-600 text-white hover:bg-green-700' },
   ];
 

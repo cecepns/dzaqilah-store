@@ -1,5 +1,5 @@
 -- Migration: 001_initial_schema
--- Description: Skema awal database Raca Cell PPOB
+-- Description: Skema awal database Dzaqilah Store PPOB
 -- Date: 2026-06-12
 
 USE raca_cell;

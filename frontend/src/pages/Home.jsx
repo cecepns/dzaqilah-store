@@ -9,7 +9,7 @@ import { API_ENDPOINTS } from '../utils/endpoints';
 import { SERVICES } from '../constants/services';
 
 const Home = () => {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isReseller } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [serviceCounts, setServiceCounts] = useState({});
@@ -17,7 +17,7 @@ const Home = () => {
   useEffect(() => {
     get(API_ENDPOINTS.DASHBOARD.STATS)
       .then((res) => setStats(res.data))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
 
     get(API_ENDPOINTS.PRODUCTS.SERVICES)
@@ -26,7 +26,7 @@ const Home = () => {
         res.data.forEach((item) => { map[item.id] = item.total; });
         setServiceCounts(map);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const adminActions = [
@@ -38,26 +38,67 @@ const Home = () => {
     { to: '/admin/product-margins', icon: Percent, label: 'Margin Produk', color: 'bg-violet-500' },
   ];
 
+  const roleLabel = {
+    owner: 'Owner',
+    admin: 'Admin',
+    reseller: '💎 Reseller',
+    user: 'Member',
+  }[user?.role] || 'Member';
+
   return (
     <div>
       <Header
-        title={`Halo, ${user?.name?.split(' ')[0] || 'User'}!`}
-        subtitle="Selamat datang di Raca Cell"
+        title={
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xl font-bold truncate">Halo, {user?.name?.split(' ')[0] || 'User'}!</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/20 text-white whitespace-nowrap">
+              {roleLabel}
+            </span>
+          </div>
+        }
+        subtitle={
+          <p className="text-white/80 text-xs mt-0.5 truncate">
+            Selamat datang di Dzaqilah Store
+          </p>
+        }
         right={
-          <div className="text-right">
-            <p className="text-primary-100 text-xs">Saldo</p>
-            <p className="font-bold text-lg">{formatCurrency(user?.balance)}</p>
+          <div className="text-right bg-white/10 backdrop-blur-xs px-3 py-1.5 rounded-xl border border-white/15 shadow-xs">
+            <p className="text-primary-100 text-[10px] uppercase font-semibold tracking-wider">Saldo</p>
+            <p className="font-bold text-base whitespace-nowrap text-white">{formatCurrency(user?.balance)}</p>
           </div>
         }
       />
 
       <div className="px-4 -mt-4 space-y-4">
+        {isReseller && (
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-3 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">💎</span>
+              <div>
+                <p className="text-xs font-semibold text-emerald-950">Harga Khusus Reseller Aktif</p>
+                <p className="text-[11px] text-emerald-700">Nikmati potongan harga langsung di setiap pembelian produk.</p>
+              </div>
+            </div>
+            <Link to="/layanan" className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1.5 rounded-xl hover:bg-emerald-200">
+              Belanja
+            </Link>
+          </div>
+        )}
+
         <div className="bg-white rounded-2xl shadow-sm border p-4">
           {loading ? (
             <div className="flex justify-center py-4"><LoadingSpinner /></div>
           ) : isAdmin ? (
             <div className="grid grid-cols-2 gap-3">
-              <StatCard icon={Users} label="Total Users" value={stats?.total_users || 0} />
+              <StatCard
+                icon={Users}
+                label="Total Users"
+                value={stats?.total_users || 0}
+                action={{
+                  to: '/admin/users',
+                  label: `${stats?.total_resellers || 0} Reseller • ${stats?.total_members || 0} Member`,
+                }}
+              />
               <StatCard icon={TrendingUp} label="Transaksi Hari Ini" value={stats?.transactions_today || 0} />
               <StatCard icon={CheckCircle} label="Sukses" value={stats?.transactions_success || 0} />
               <StatCard icon={Clock} label="Pending" value={stats?.transactions_pending || 0} />

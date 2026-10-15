@@ -13,3 +13,6 @@ mobile/ios/
 *.swp
 coverage/
 .cache/
+backend/uploads-*/*
+!backend/uploads-*/.gitkeep
+!backend/uploads-*/*/.gitkeep

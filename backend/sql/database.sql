@@ -1,4 +1,4 @@
--- Raca Cell PPOB - Full Database Schema (latest)
+-- Dzaqilah Store PPOB - Full Database Schema (latest)
 -- Untuk fresh install, jalankan file ini ATAU gunakan migration berurutan:
 --   sql/migrations/000_create_database.sql
 --   sql/migrations/001_initial_schema.sql
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone VARCHAR(20) NOT NULL,
   partner_name VARCHAR(100) NULL DEFAULT NULL,
   password VARCHAR(255) NOT NULL,
-  role ENUM('owner', 'admin', 'user') NOT NULL DEFAULT 'user',
+  role ENUM('owner', 'admin', 'reseller', 'user') NOT NULL DEFAULT 'user',
   balance DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
   status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -97,6 +97,9 @@ CREATE TABLE IF NOT EXISTS settings (
 INSERT INTO settings (setting_key, setting_value) VALUES ('margin_percent', '5')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
+INSERT INTO settings (setting_key, setting_value) VALUES ('margin_reseller_percent', '2')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
 INSERT INTO settings (setting_key, setting_value) VALUES ('admin_whatsapp', '')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
@@ -108,6 +111,7 @@ CREATE TABLE IF NOT EXISTS product_margins (
   product_name VARCHAR(200) NOT NULL,
   transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid',
   margin_percent DECIMAL(5, 2) NOT NULL,
+  reseller_margin_percent DECIMAL(5, 2) NULL DEFAULT NULL,
   updated_by INT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -123,6 +127,7 @@ CREATE TABLE IF NOT EXISTS topup_requests (
   user_id INT NOT NULL,
   amount DECIMAL(15, 2) NOT NULL,
   note TEXT,
+  proof_image VARCHAR(255) NULL,
   status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   admin_note TEXT,
   processed_by INT,

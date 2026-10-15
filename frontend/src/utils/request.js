@@ -1,4 +1,5 @@
 import { api } from './api';
+import { API_BASE_URL } from './config';
 
 export const get = async (url, params = {}) => {
   const response = await api.get(url, { params });
@@ -7,6 +8,13 @@ export const get = async (url, params = {}) => {
 
 export const post = async (url, data = {}) => {
   const response = await api.post(url, data);
+  return response.data;
+};
+
+export const postForm = async (url, formData) => {
+  const response = await api.post(url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return response.data;
 };
 
@@ -34,3 +42,13 @@ export const formatDate = (date) =>
 
 export const getErrorMessage = (error) =>
   error?.response?.data?.message || error?.message || 'Terjadi kesalahan';
+
+export const getMediaUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('blob:') || path.startsWith('data:')) {
+    return path;
+  }
+  const baseUrl = API_BASE_URL || 'http://localhost:5000/api';
+  const serverOrigin = baseUrl.replace(/\/api\/?$/, '');
+  return `${serverOrigin}${path.startsWith('/') ? path : `/${path}`}`;
+};

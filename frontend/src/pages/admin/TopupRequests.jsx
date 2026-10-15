@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Check, X } from 'lucide-react';
+import { Check, X, Eye, Image as ImageIcon } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import SearchInput from '../../components/ui/SearchInput';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -8,7 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import Pagination from '../../components/ui/Pagination';
 import { useDebounce } from '../../hooks/useDebounce';
-import { get, put, formatCurrency, formatDate, getErrorMessage } from '../../utils/request';
+import { get, put, formatCurrency, formatDate, getErrorMessage, getMediaUrl } from '../../utils/request';
 import { API_ENDPOINTS } from '../../utils/endpoints';
 
 const statusLabels = { pending: 'Pending', approved: 'Disetujui', rejected: 'Ditolak' };
@@ -27,6 +27,7 @@ const TopupRequests = () => {
   const [modal, setModal] = useState(null);
   const [adminNote, setAdminNote] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [previewProofUrl, setPreviewProofUrl] = useState(null);
 
   const debouncedSearch = useDebounce(search);
 
@@ -114,6 +115,21 @@ const TopupRequests = () => {
                 {req.note && <p className="text-xs text-gray-500 mt-1">Catatan: {req.note}</p>}
                 {req.admin_note && <p className="text-xs text-gray-500 mt-1">Respon: {req.admin_note}</p>}
 
+                {req.proof_image && (
+                  <div className="mt-2.5 pt-2 border-t flex items-center justify-between">
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <ImageIcon className="w-3.5 h-3.5 text-gray-400" /> Ada Bukti Transfer
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewProofUrl(getMediaUrl(req.proof_image))}
+                      className="inline-flex items-center gap-1 text-xs text-primary-600 font-medium hover:underline bg-primary-50 px-2.5 py-1 rounded-lg hover:bg-primary-100"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Lihat Bukti
+                    </button>
+                  </div>
+                )}
+
                 {req.status === 'pending' && (
                   <div className="flex gap-2 mt-3">
                     <button
@@ -152,6 +168,28 @@ const TopupRequests = () => {
             <p className="text-sm text-gray-600">
               {modal.request.user_name} — <strong>{formatCurrency(modal.request.amount)}</strong>
             </p>
+
+            {modal.request.proof_image && (
+              <div className="border rounded-xl p-2.5 bg-gray-50 flex items-center gap-3">
+                <img
+                  src={getMediaUrl(modal.request.proof_image)}
+                  alt="Bukti Transfer"
+                  onClick={() => setPreviewProofUrl(getMediaUrl(modal.request.proof_image))}
+                  className="w-14 h-14 object-cover rounded-lg border bg-white cursor-pointer hover:opacity-90"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-900">Bukti Transfer Pengirim</p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewProofUrl(getMediaUrl(modal.request.proof_image))}
+                    className="text-xs text-primary-600 font-medium hover:underline flex items-center gap-1 mt-0.5"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Lihat Ukuran Penuh
+                  </button>
+                </div>
+              </div>
+            )}
+
             <textarea
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
@@ -170,6 +208,42 @@ const TopupRequests = () => {
             </button>
           </div>
         )}
+      </Modal>
+
+      {/* Modal Preview Bukti Transfer Admin */}
+      <Modal
+        isOpen={Boolean(previewProofUrl)}
+        onClose={() => setPreviewProofUrl(null)}
+        title="Bukti Transfer User"
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center max-h-[65vh] border">
+            {previewProofUrl && (
+              <img
+                src={previewProofUrl}
+                alt="Bukti Transfer"
+                className="w-full h-auto max-h-[65vh] object-contain"
+              />
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <a
+              href={previewProofUrl || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors"
+            >
+              Buka Tab Baru
+            </a>
+            <button
+              type="button"
+              onClick={() => setPreviewProofUrl(null)}
+              className="px-4 py-2 text-xs font-medium bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-colors"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

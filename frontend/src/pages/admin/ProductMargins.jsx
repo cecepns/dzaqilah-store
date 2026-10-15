@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Percent, Edit2, RotateCcw, ArrowLeft } from 'lucide-react';
+import { Percent, Edit2, RotateCcw, ArrowLeft, Sparkles, TrendingUp } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import SearchInput from '../../components/ui/SearchInput';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -22,6 +22,7 @@ const ProductMargins = () => {
   const [products, setProducts] = useState([]);
   const [customMargins, setCustomMargins] = useState([]);
   const [globalMargin, setGlobalMargin] = useState(0);
+  const [globalResellerMargin, setGlobalResellerMargin] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingCustom, setLoadingCustom] = useState(true);
   const [search, setSearch] = useState('');
@@ -31,6 +32,7 @@ const ProductMargins = () => {
   const [customPagination, setCustomPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [editProduct, setEditProduct] = useState(null);
   const [marginInput, setMarginInput] = useState('');
+  const [resellerMarginInput, setResellerMarginInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('browse');
 
@@ -49,7 +51,8 @@ const ProductMargins = () => {
       });
       setProducts(res.data);
       setPagination(res.pagination);
-      setGlobalMargin(res.margin_percent ?? globalMargin);
+      setGlobalMargin(res.member_margin_percent ?? res.margin_percent ?? globalMargin);
+      setGlobalResellerMargin(res.reseller_margin_percent ?? globalResellerMargin);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -69,6 +72,7 @@ const ProductMargins = () => {
       setCustomMargins(res.data);
       setCustomPagination(res.pagination);
       setGlobalMargin(res.global_margin_percent ?? globalMargin);
+      setGlobalResellerMargin(res.global_reseller_margin_percent ?? globalResellerMargin);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -91,21 +95,30 @@ const ProductMargins = () => {
 
   const openEdit = (product) => {
     setEditProduct(product);
-    const current = product.custom_margin_percent ?? product.margin_percent ?? globalMargin;
-    setMarginInput(String(current));
+    const currentMember = product.custom_margin_percent ?? product.margin_percent ?? globalMargin;
+    const currentReseller = product.custom_reseller_margin_percent ?? product.reseller_margin_percent ?? globalResellerMargin;
+    setMarginInput(String(currentMember));
+    setResellerMarginInput(String(currentReseller));
   };
 
   const handleSave = async () => {
-    const value = parseFloat(marginInput);
-    if (Number.isNaN(value) || value < 0 || value > 100) {
-      toast.error('Margin harus antara 0% - 100%');
+    const memVal = parseFloat(marginInput);
+    const resVal = resellerMarginInput !== '' ? parseFloat(resellerMarginInput) : null;
+
+    if (Number.isNaN(memVal) || memVal < 0 || memVal > 100) {
+      toast.error('Margin member harus antara 0% - 100%');
+      return;
+    }
+    if (resVal !== null && (Number.isNaN(resVal) || resVal < 0 || resVal > 100)) {
+      toast.error('Margin reseller harus antara 0% - 100%');
       return;
     }
 
     setSaving(true);
     try {
       const res = await put(API_ENDPOINTS.PRODUCTS.MARGINS.SET(editProduct.buyer_sku_code), {
-        margin_percent: value,
+        margin_percent: memVal,
+        reseller_margin_percent: resVal,
         product_name: editProduct.product_name,
         transaction_type: isPasca ? 'pasca' : 'prepaid',
       });
@@ -149,46 +162,56 @@ const ProductMargins = () => {
   return (
     <div>
       <Header
-        title="Margin Per Produk"
-        subtitle={`Margin global: ${globalMargin}%`}
+        title="Margin Produk"
+        subtitle="Atur margin Member & Reseller per item"
         right={
-          <Link to="/admin/margin" className="p-2 bg-white/20 rounded-xl">
+          <Link to="/admin/margin" className="p-2 bg-white/20 rounded-xl" title="Pengaturan Global">
             <ArrowLeft className="w-5 h-5 text-white" />
           </Link>
         }
       />
 
       <div className="px-4 -mt-4 space-y-3">
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-800">
-          Produk dengan margin khusus akan mengabaikan margin global. Produk tanpa margin khusus tetap memakai margin global ({globalMargin}%).
+        {/* Info Global Margins */}
+        <div className="bg-white border rounded-2xl p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Percent className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-500">Global Member</p>
+              <p className="text-sm font-bold text-blue-600">{globalMargin}%</p>
+            </div>
+          </div>
+          <div className="h-6 w-px bg-gray-200" />
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-500">Global Reseller</p>
+              <p className="text-sm font-bold text-emerald-600">{globalResellerMargin}%</p>
+            </div>
+          </div>
+          <Link to="/admin/margin" className="text-xs text-primary-600 font-medium hover:underline">
+            Ubah
+          </Link>
         </div>
 
-        <div className="flex gap-2">
-          {[
-            { id: 'browse', label: 'Semua Produk' },
-            { id: 'custom', label: 'Margin Khusus' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium ${
-                activeTab === tab.id ? 'bg-primary-600 text-white' : 'bg-white border text-gray-600'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex gap-2">
+        {/* Type Switcher */}
+        <div className="flex bg-gray-100 p-1 rounded-xl">
           {TYPE_TABS.map((tab) => (
             <button
               key={tab.id}
-              type="button"
-              onClick={() => setProductType(tab.id)}
-              className={`flex-1 py-2 rounded-xl text-xs font-medium ${
-                productType === tab.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+              onClick={() => {
+                setProductType(tab.id);
+                if (tab.id === 'pasca') setSelectedService('pln-pasca');
+                else setSelectedService('pulsa');
+              }}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${
+                productType === tab.id
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
               }`}
             >
               {tab.label}
@@ -196,15 +219,41 @@ const ProductMargins = () => {
           ))}
         </div>
 
+        {/* Tab Browse vs Custom */}
+        <div className="flex border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('browse')}
+            className={`flex-1 pb-2.5 text-xs font-semibold text-center border-b-2 transition-colors ${
+              activeTab === 'browse'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Katalog Produk
+          </button>
+          <button
+            onClick={() => setActiveTab('custom')}
+            className={`flex-1 pb-2.5 text-xs font-semibold text-center border-b-2 transition-colors ${
+              activeTab === 'custom'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Khusus Diatur ({customPagination.total || 0})
+          </button>
+        </div>
+
+        {/* Filter Services if browse */}
         {activeTab === 'browse' && (
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {SERVICES.filter((s) => s.type === productType).map((svc) => (
               <button
                 key={svc.id}
-                type="button"
                 onClick={() => setSelectedService(svc.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                  selectedService === svc.id ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  selectedService === svc.id
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {svc.label}
@@ -216,14 +265,14 @@ const ProductMargins = () => {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Cari nama produk atau SKU..."
+          placeholder="Cari SKU atau nama produk..."
         />
 
         {activeTab === 'browse' ? (
           loading ? (
             <div className="flex justify-center py-12"><LoadingSpinner /></div>
           ) : products.length === 0 ? (
-            <EmptyState title="Produk tidak ditemukan" description="Coba ubah pencarian atau layanan" />
+            <EmptyState title="Produk tidak ditemukan" />
           ) : (
             <div className="space-y-2">
               {products.map((product) => (
@@ -233,22 +282,26 @@ const ProductMargins = () => {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm truncate">{product.product_name}</p>
-                    <p className="text-xs text-gray-500">{product.brand} • {product.buyer_sku_code}</p>
+                    <p className="text-xs text-gray-500">{product.buyer_sku_code} • {product.brand}</p>
                     {!isPasca && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Modal {formatCurrency(product.price)} → Jual {formatCurrency(product.selling_price)}
+                      <p className="text-xs text-gray-600 mt-1">
+                        Modal: <span className="font-medium">{formatCurrency(product.price)}</span>
                       </p>
                     )}
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
                         product.has_custom_margin
-                          ? 'bg-indigo-100 text-indigo-700'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-gray-100 text-gray-600'
                       }`}>
-                        <Percent className="w-3 h-3" />
-                        {product.has_custom_margin
-                          ? `Khusus ${product.custom_margin_percent}%`
-                          : `Global ${globalMargin}%`}
+                        Member: {product.custom_margin_percent ?? globalMargin}%
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                        product.custom_reseller_margin_percent != null
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        💎 Reseller: {product.custom_reseller_margin_percent ?? globalResellerMargin}%
                       </span>
                     </div>
                   </div>
@@ -282,7 +335,7 @@ const ProductMargins = () => {
         ) : customMargins.length === 0 ? (
           <EmptyState
             title="Belum ada margin khusus"
-            description={`Semua produk ${productType} memakai margin global ${globalMargin}%`}
+            description={`Semua produk ${productType} saat ini memakai margin global (Member: ${globalMargin}%, Reseller: ${globalResellerMargin}%)`}
           />
         ) : (
           <div className="space-y-2">
@@ -294,10 +347,14 @@ const ProductMargins = () => {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">{item.product_name}</p>
                   <p className="text-xs text-gray-500">{item.buyer_sku_code} • {item.transaction_type}</p>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 mt-1 rounded-full text-[10px] font-medium bg-indigo-100 text-indigo-700">
-                    <Percent className="w-3 h-3" />
-                    {item.margin_percent}%
-                  </span>
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">
+                      Member: {item.margin_percent}%
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-700">
+                      💎 Reseller: {item.reseller_margin_percent ?? globalResellerMargin}%
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <button
@@ -315,7 +372,9 @@ const ProductMargins = () => {
                       buyer_sku_code: item.buyer_sku_code,
                       product_name: item.product_name,
                       custom_margin_percent: item.margin_percent,
+                      custom_reseller_margin_percent: item.reseller_margin_percent,
                       margin_percent: item.margin_percent,
+                      reseller_margin_percent: item.reseller_margin_percent,
                       has_custom_margin: true,
                       price: 0,
                     })}
@@ -347,22 +406,26 @@ const ProductMargins = () => {
       <Modal
         isOpen={!!editProduct}
         onClose={() => setEditProduct(null)}
-        title="Atur Margin Produk"
+        title="Atur Margin Khusus Produk"
       >
         {editProduct && (
           <div className="space-y-4">
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="font-medium text-gray-900">{editProduct.product_name}</p>
-              <p className="text-xs text-gray-500 mt-1">{editProduct.buyer_sku_code}</p>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="font-semibold text-gray-900 text-sm">{editProduct.product_name}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{editProduct.buyer_sku_code}</p>
               {!isPasca && editProduct.price > 0 && (
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-xs text-gray-600 mt-1.5 font-medium">
                   Harga modal: {formatCurrency(editProduct.price)}
                 </p>
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Margin (%)</label>
+            {/* Member Margin Input */}
+            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-blue-900">Margin Member (%)</label>
+                <span className="text-[10px] text-blue-600">Global: {globalMargin}%</span>
+              </div>
               <input
                 type="number"
                 min="0"
@@ -370,18 +433,18 @@ const ProductMargins = () => {
                 step="0.5"
                 value={marginInput}
                 onChange={(e) => setMarginInput(e.target.value)}
-                className="w-full px-4 py-3 bg-white text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 bg-white text-gray-900 border border-blue-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <div className="flex gap-2 mt-2 flex-wrap">
-                {[0, 3, 5, 10, 15, 20].map((preset) => (
+              <div className="flex gap-1.5 flex-wrap">
+                {[3, 5, 7, 10, 15].map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setMarginInput(String(preset))}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium ${
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
                       parseFloat(marginInput) === preset
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-blue-700 border border-blue-200 hover:bg-blue-50'
                     }`}
                   >
                     {preset}%
@@ -390,18 +453,54 @@ const ProductMargins = () => {
               </div>
             </div>
 
+            {/* Reseller Margin Input */}
+            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-emerald-900">💎 Margin Reseller (%)</label>
+                <span className="text-[10px] text-emerald-600">Global: {globalResellerMargin}%</span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={resellerMarginInput}
+                onChange={(e) => setResellerMarginInput(e.target.value)}
+                className="w-full px-3 py-2 bg-white text-gray-900 border border-emerald-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <div className="flex gap-1.5 flex-wrap">
+                {[0, 1, 1.5, 2, 2.5, 3, 5].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setResellerMarginInput(String(preset))}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      parseFloat(resellerMarginInput) === preset
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+                    }`}
+                  >
+                    {preset}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Price Preview */}
             {!isPasca && editProduct.price > 0 && (
-              <div className="bg-primary-50 rounded-xl p-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Preview harga jual</span>
-                  <span className="font-bold text-primary-600">
-                    {formatCurrency(previewSelling(editProduct, marginInput))}
-                  </span>
+              <div className="bg-slate-50 border rounded-xl p-3 text-xs space-y-1.5">
+                <div className="flex justify-between text-gray-600">
+                  <span>Harga Jual Member:</span>
+                  <span className="font-bold text-blue-600">{formatCurrency(previewSelling(editProduct, marginInput))}</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Global saat ini: {globalMargin}%
-                  {parseFloat(marginInput) === globalMargin && ' (sama dengan global)'}
-                </p>
+                <div className="flex justify-between text-gray-600">
+                  <span>Harga Jual Reseller:</span>
+                  <span className="font-bold text-emerald-600">{formatCurrency(previewSelling(editProduct, resellerMarginInput))}</span>
+                </div>
+                <div className="border-t pt-1 flex justify-between text-emerald-700 font-medium">
+                  <span>Selisih Hemat Reseller:</span>
+                  <span>{formatCurrency(Math.max(0, previewSelling(editProduct, marginInput) - previewSelling(editProduct, resellerMarginInput)))}</span>
+                </div>
               </div>
             )}
 
@@ -411,7 +510,7 @@ const ProductMargins = () => {
                   type="button"
                   onClick={() => handleReset(editProduct)}
                   disabled={saving}
-                  className="flex-1 border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-50 disabled:opacity-60"
+                  className="flex-1 border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
                 >
                   Pakai Global
                 </button>
@@ -420,7 +519,7 @@ const ProductMargins = () => {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center justify-center"
+                className="flex-1 bg-primary-600 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center justify-center"
               >
                 {saving ? <LoadingSpinner size="sm" className="text-white" /> : 'Simpan Margin'}
               </button>

@@ -8,7 +8,7 @@ const line = '--------------------------------';
 
 export const getReceiptStoreName = (partnerName) => {
   const trimmed = partnerName?.trim();
-  return trimmed || 'Raca Cell';
+  return trimmed || 'Dzaqilah Store';
 };
 
 export const buildReceiptText = (transaction, partnerName) => {
@@ -17,7 +17,7 @@ export const buildReceiptText = (transaction, partnerName) => {
   const lines = [
     divider,
     storeName.toUpperCase(),
-    ...(hasPartner ? [] : ['Raca Cell PPOB']),
+    ...(hasPartner ? [] : ['Dzaqilah Store PPOB']),
     divider,
     `Tanggal   : ${formatDate(transaction.created_at)}`,
     `Ref ID    : ${transaction.ref_id}`,

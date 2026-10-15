@@ -13,6 +13,8 @@ export const AuthProvider = ({ children }) => {
 
   const isAdmin = user && ['owner', 'admin'].includes(user.role);
   const isOwner = user?.role === 'owner';
+  const isReseller = user?.role === 'reseller';
+  const isMember = user?.role === 'user';
 
   const refreshProfile = useCallback(async () => {
     try {
@@ -73,7 +75,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, isAdmin, isOwner, login, register, logout, refreshProfile, updateBalance, updatePartnerName }}
+      value={{ user, loading, isAdmin, isOwner, isReseller, isMember, login, register, logout, refreshProfile, updateBalance, updatePartnerName }}
     >
       {children}
     </AuthContext.Provider>

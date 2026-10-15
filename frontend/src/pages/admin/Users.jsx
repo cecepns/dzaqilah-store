@@ -113,7 +113,19 @@ const Users = () => {
     }
   };
 
-  const roleColors = { owner: 'bg-purple-100 text-purple-700', admin: 'bg-blue-100 text-blue-700', user: 'bg-gray-100 text-gray-700' };
+  const roleColors = {
+    owner: 'bg-purple-100 text-purple-700',
+    admin: 'bg-blue-100 text-blue-700',
+    reseller: 'bg-emerald-100 text-emerald-700',
+    user: 'bg-gray-100 text-gray-700',
+  };
+
+  const roleLabels = {
+    owner: 'Owner',
+    admin: 'Admin',
+    reseller: 'Reseller',
+    user: 'Member',
+  };
 
   return (
     <div>
@@ -130,16 +142,22 @@ const Users = () => {
       <div className="px-4 -mt-4 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Cari user..." />
 
-        <div className="flex gap-2 overflow-x-auto">
-          {['', 'user', 'admin', 'owner'].map((r) => (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {[
+            { id: '', label: 'Semua' },
+            { id: 'user', label: 'Member' },
+            { id: 'reseller', label: 'Reseller' },
+            { id: 'admin', label: 'Admin' },
+            { id: 'owner', label: 'Owner' },
+          ].map((r) => (
             <button
-              key={r || 'all'}
-              onClick={() => { setRoleFilter(r); setPagination((p) => ({ ...p, page: 1 })); }}
+              key={r.id || 'all'}
+              onClick={() => { setRoleFilter(r.id); setPagination((p) => ({ ...p, page: 1 })); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                roleFilter === r ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+                roleFilter === r.id ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
               }`}
             >
-              {r ? r.charAt(0).toUpperCase() + r.slice(1) : 'Semua'}
+              {r.label}
             </button>
           ))}
         </div>
@@ -158,8 +176,8 @@ const Users = () => {
                     <p className="text-xs text-gray-500">{user.email}</p>
                     <p className="text-xs text-gray-500">{user.phone}</p>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColors[user.role]}`}>
-                    {user.role}
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roleColors[user.role] || roleColors.user}`}>
+                    {roleLabels[user.role] || user.role}
                   </span>
                 </div>
                 <div className="flex items-center justify-between mt-3">
@@ -227,23 +245,31 @@ const Users = () => {
               className="w-full px-4 py-2.5 border rounded-xl"
             />
           )}
-          <select
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="w-full px-4 py-2.5 border rounded-xl bg-white"
-            disabled={editUser?.role === 'owner'}
-          >
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
-          </select>
-          <select
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-            className="w-full px-4 py-2.5 border rounded-xl bg-white"
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Role Akun</label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="w-full px-4 py-2.5 border rounded-xl bg-white"
+              disabled={editUser?.role === 'owner'}
+            >
+              <option value="user">Member (User Biasa)</option>
+              <option value="reseller">Reseller (Harga Khusus)</option>
+              {isOwner && <option value="admin">Admin</option>}
+              {editUser?.role === 'owner' && <option value="owner">Owner</option>}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Status Akun</label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="w-full px-4 py-2.5 border rounded-xl bg-white"
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
           <button
             onClick={handleSave}
             disabled={saving}

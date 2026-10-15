@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ChevronRight, ArrowLeft, Percent, Edit2 } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Percent, Edit2, Sparkles } from 'lucide-react';
 import Header from '../components/layout/Header';
 import SearchInput from '../components/ui/SearchInput';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -18,7 +18,7 @@ const ServiceProducts = () => {
   const { serviceId } = useParams();
   const service = getServiceById(serviceId);
   const isPasca = service.type === 'pasca';
-  const { user, updateBalance, refreshProfile, isAdmin } = useAuth();
+  const { user, updateBalance, refreshProfile, isAdmin, isReseller } = useAuth();
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]);
   const [globalMargin, setGlobalMargin] = useState(0);
@@ -229,6 +229,18 @@ const ServiceProducts = () => {
       />
 
       <div className="px-4 -mt-4 space-y-3">
+        {isReseller && (
+          <div className="flex items-center gap-2.5 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl shadow-sm text-emerald-800 text-xs">
+            <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-emerald-900">💎 Akun Reseller Aktif</p>
+              <p className="text-[11px] text-emerald-700">Harga khusus reseller diterapkan otomatis di seluruh produk.</p>
+            </div>
+          </div>
+        )}
+
         <SearchInput value={search} onChange={setSearch} placeholder={`Cari ${service.label.toLowerCase()}...`} />
 
         {brands.length > 0 && (
@@ -303,7 +315,7 @@ const ServiceProducts = () => {
                     </span>
                   )}
                 </div>
-                <div className="text-right flex-shrink-0 flex items-center gap-1">
+                <div className="text-right flex-shrink-0 flex items-center gap-1.5">
                   {isAdmin && (
                     <button
                       type="button"
@@ -314,11 +326,27 @@ const ServiceProducts = () => {
                       <Edit2 className="w-4 h-4" />
                     </button>
                   )}
-                  {isPasca ? (
-                    <p className="text-xs font-medium text-primary-600">Cek Tagihan</p>
-                  ) : (
-                    <p className="font-bold text-primary-600 text-sm">{formatCurrency(product.selling_price)}</p>
-                  )}
+                  <div>
+                    {isPasca ? (
+                      <p className="text-xs font-medium text-primary-600">Cek Tagihan</p>
+                    ) : (
+                      <>
+                        <p className={`font-bold text-sm ${isReseller ? 'text-emerald-600' : 'text-primary-600'}`}>
+                          {formatCurrency(product.selling_price)}
+                        </p>
+                        {isReseller && product.member_price > product.selling_price && (
+                          <div className="flex items-center justify-end gap-1 mt-0.5">
+                            <span className="text-[10px] line-through text-gray-400">
+                              {formatCurrency(product.member_price)}
+                            </span>
+                            <span className="text-[9px] bg-emerald-100 text-emerald-700 font-semibold px-1 rounded">
+                              Hemat
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <ChevronRight className="w-4 h-4 text-gray-300 ml-auto" />
                 </div>
               </button>
@@ -344,9 +372,21 @@ const ServiceProducts = () => {
               <p className="font-medium text-gray-900">{selectedProduct.product_name}</p>
               <p className="text-sm text-gray-500 mt-1">{selectedProduct.brand}</p>
               {!isPasca && (
-                <p className="text-lg font-bold text-primary-600 mt-2">
-                  {formatCurrency(selectedProduct.selling_price)}
-                </p>
+                <div className="mt-2">
+                  <p className={`text-xl font-bold ${isReseller ? 'text-emerald-600' : 'text-primary-600'}`}>
+                    {formatCurrency(selectedProduct.selling_price)}
+                  </p>
+                  {isReseller && selectedProduct.member_price > selectedProduct.selling_price && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-400 line-through">
+                        Harga Member: {formatCurrency(selectedProduct.member_price)}
+                      </span>
+                      <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2 py-0.5 rounded-full">
+                        Hemat {formatCurrency(selectedProduct.member_price - selectedProduct.selling_price)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
