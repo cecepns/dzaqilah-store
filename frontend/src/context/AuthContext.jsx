@@ -11,10 +11,27 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = user && ['owner', 'admin'].includes(user.role);
-  const isOwner = user?.role === 'owner';
-  const isReseller = user?.role === 'reseller';
-  const isMember = user?.role === 'user';
+  const rawRole = String(user?.role || '').toLowerCase().trim();
+  const isOwner = rawRole === 'owner';
+  const isAdmin = isOwner || rawRole === 'admin';
+  const isReseller = rawRole === 'reseller';
+  const isMember = !isAdmin && !isReseller;
+
+  const roleLabel = isOwner
+    ? 'Owner'
+    : isAdmin
+    ? 'Admin'
+    : isReseller
+    ? 'Reseller'
+    : 'Member';
+
+  const roleTitle = isOwner
+    ? 'Owner'
+    : isAdmin
+    ? 'Admin'
+    : isReseller
+    ? 'Reseller Prioritas'
+    : 'Member';
 
   const refreshProfile = useCallback(async () => {
     try {
@@ -75,7 +92,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, isAdmin, isOwner, isReseller, isMember, login, register, logout, refreshProfile, updateBalance, updatePartnerName }}
+      value={{ user, loading, isAdmin, isOwner, isReseller, isMember, roleLabel, roleTitle, rawRole, login, register, logout, refreshProfile, updateBalance, updatePartnerName }}
     >
       {children}
     </AuthContext.Provider>

@@ -77,7 +77,7 @@ const resolveImageUrl = (path) => {
 };
 
 const Home = () => {
-  const { user, isAdmin, isReseller, refreshProfile } = useAuth();
+  const { user, isAdmin, isOwner, isReseller, roleLabel, roleTitle, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [stats, setStats] = useState(null);
@@ -115,6 +115,7 @@ const Home = () => {
       const [statsRes, servicesRes] = await Promise.all([
         get(API_ENDPOINTS.DASHBOARD.STATS).catch(() => ({ data: null })),
         get(API_ENDPOINTS.PRODUCTS.SERVICES).catch(() => ({ data: [] })),
+        refreshProfile().catch(() => null),
       ]);
 
       if (statsRes?.data) setStats(statsRes.data);
@@ -225,7 +226,7 @@ const Home = () => {
                   </h1>
                 </div>
                 <p className="text-[10px] text-teal-200">
-                  {user?.name || 'Agen Resmi'} • {isReseller ? 'Reseller Prioritas' : 'Member'}
+                  {user?.name || 'Agen Resmi'} • {roleTitle}
                 </p>
               </div>
             </div>
@@ -352,7 +353,7 @@ const Home = () => {
               <div className="flex items-center gap-1 text-teal-600 mb-0.5">
                 <Award className="w-3.5 h-3.5 text-orange-500" />
                 <span className="font-bold text-xs text-gray-900">
-                  {isReseller ? 'Reseller' : 'Member'}
+                  {roleLabel}
                 </span>
               </div>
               <span className="text-[10px] text-gray-500 font-medium">Level Agen</span>
@@ -600,7 +601,7 @@ const Home = () => {
           <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-1.5">
               <Award className="w-5 h-5 text-teal-700" />
-              <h3 className="font-bold text-teal-950 text-sm">Status: {isReseller ? 'Reseller Prioritas' : 'Member Agen'}</h3>
+              <h3 className="font-bold text-teal-950 text-sm">Status: {roleTitle}</h3>
             </div>
             <p className="text-xs text-teal-800 leading-relaxed">
               {isReseller
@@ -793,7 +794,13 @@ const Home = () => {
               </div>
 
               <div className="py-3 border-b border-gray-100">
-                <p className="text-xs text-gray-500">Saldo Akun:</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-bold text-gray-800 truncate max-w-[130px]">{user?.name || 'Agen'}</p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                    {roleLabel}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500">Saldo Akun:</p>
                 <p className="text-base font-bold text-teal-700">{formatCurrency(user?.balance)}</p>
               </div>
 

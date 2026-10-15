@@ -19,7 +19,7 @@ const roleBadgeStyles = {
 };
 
 const Profile = () => {
-  const { user, logout, isAdmin, isReseller, updatePartnerName } = useAuth();
+  const { user, logout, isAdmin, isReseller, roleLabel, rawRole, updatePartnerName } = useAuth();
   const navigate = useNavigate();
   const [contact, setContact] = useState(null);
   const [partnerName, setPartnerName] = useState(user?.partner_name || '');
@@ -122,8 +122,8 @@ const Profile = () => {
             </div>
             <div>
               <h2 className="font-bold text-gray-900 text-base">{user?.name}</h2>
-              <span className={`inline-block px-2.5 py-0.5 text-xs rounded-full font-semibold mt-1 ${roleBadgeStyles[user?.role] || roleBadgeStyles.user}`}>
-                {roleLabels[user?.role] || 'Member'}
+              <span className={`inline-block px-2.5 py-0.5 text-xs rounded-full font-semibold mt-1 ${roleBadgeStyles[rawRole] || roleBadgeStyles.user}`}>
+                {roleLabel}
               </span>
               {isReseller && (
                 <p className="text-[11px] text-emerald-600 font-medium mt-1">Harga khusus reseller aktif</p>
