@@ -18,6 +18,7 @@ import MarginSettings from './pages/admin/MarginSettings';
 import ProductMargins from './pages/admin/ProductMargins';
 import TopupRequest from './pages/TopupRequest';
 import AdminTopupRequests from './pages/admin/TopupRequests';
+import BannerSettings from './pages/admin/BannerSettings';
 
 const App = () => (
   <AuthProvider>
@@ -92,6 +93,14 @@ const App = () => (
             element={
               <ProtectedRoute adminOnly>
                 <AdminTopupRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/banners"
+            element={
+              <ProtectedRoute adminOnly>
+                <BannerSettings />
               </ProtectedRoute>
             }
           />

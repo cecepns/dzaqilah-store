@@ -102,14 +102,14 @@ const Register = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-60 flex items-center justify-center"
+            className="w-full bg-gradient-to-r from-teal-700 to-cyan-700 hover:from-teal-800 hover:to-cyan-800 text-white py-3 rounded-xl font-bold shadow-md shadow-teal-700/20 active:scale-[0.99] disabled:opacity-60 flex items-center justify-center transition-all"
           >
             {loading ? <LoadingSpinner size="sm" className="text-white" /> : 'Daftar'}
           </button>
 
           <p className="text-center text-sm text-gray-500">
             Sudah punya akun?{' '}
-            <Link to="/login" className="text-primary-600 font-medium">Masuk</Link>
+            <Link to="/login" className="text-teal-700 font-bold hover:underline">Masuk</Link>
           </p>
         </form>
       </div>

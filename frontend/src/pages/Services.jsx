@@ -25,29 +25,45 @@ const Services = () => {
   }, []);
 
   return (
-    <div>
-      <Header title="Layanan PPOB" subtitle={`Saldo: ${formatCurrency(user?.balance)}`} />
+    <div className="min-h-screen bg-gray-50 pb-16">
+      <Header
+        title="Katalog Layanan"
+        subtitle={`Dzaqilah Cell • Saldo: ${formatCurrency(user?.balance)}`}
+      />
 
-      <div className="px-4 -mt-4">
+      <div className="max-w-mobile mx-auto px-3.5 -mt-3.5 space-y-3">
         {loading ? (
-          <div className="flex justify-center py-12"><LoadingSpinner /></div>
+          <div className="flex justify-center py-16"><LoadingSpinner /></div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2.5">
             {SERVICES.map(({ id, label, description, icon: Icon, color }) => (
               <Link
                 key={id}
                 to={`/layanan/${id}`}
-                className="bg-white border rounded-2xl p-4 hover:shadow-md transition-shadow"
+                className="bg-white border border-gray-200/80 rounded-2xl p-3.5 hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.98] group flex flex-col justify-between relative overflow-hidden"
               >
-                <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center mb-3`}>
-                  <Icon className="w-6 h-6 text-white" />
+                <div className="relative z-10">
+                  <div className={`w-11 h-11 ${color} rounded-xl flex items-center justify-center mb-2.5 shadow-xs group-hover:scale-105 transition-transform`}>
+                    <Icon className="w-5 h-5 text-white stroke-[2.2]" />
+                  </div>
+                  <h3 className="font-bold text-gray-900 text-xs tracking-tight group-hover:text-teal-700 transition-colors">
+                    {label}
+                  </h3>
+                  <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                    {description}
+                  </p>
                 </div>
-                <h3 className="font-semibold text-gray-900 text-sm">{label}</h3>
-                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{description}</p>
-                {counts[id] !== undefined && (
-                  <p className="text-[10px] text-primary-600 font-medium mt-2">{counts[id]} produk</p>
-                )}
-                <ChevronRight className="w-4 h-4 text-gray-300 mt-2 ml-auto" />
+
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                  {counts[id] !== undefined ? (
+                    <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                      {counts[id]} produk
+                    </span>
+                  ) : (
+                    <span />
+                  )}
+                  <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all" />
+                </div>
               </Link>
             ))}
           </div>

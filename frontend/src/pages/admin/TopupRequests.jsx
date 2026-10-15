@@ -84,8 +84,8 @@ const TopupRequests = () => {
             <button
               key={s || 'all'}
               onClick={() => { setStatus(s); setPagination((p) => ({ ...p, page: 1 })); }}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                status === s ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                status === s ? 'bg-teal-600 text-white font-bold shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {s ? statusLabels[s] : 'Semua'}
@@ -110,7 +110,7 @@ const TopupRequests = () => {
                     {statusLabels[req.status]}
                   </span>
                 </div>
-                <p className="text-lg font-bold text-primary-600">{formatCurrency(req.amount)}</p>
+                <p className="text-lg font-bold text-teal-600">{formatCurrency(req.amount)}</p>
                 <p className="text-xs text-gray-400 mt-1">{formatDate(req.created_at)}</p>
                 {req.note && <p className="text-xs text-gray-500 mt-1">Catatan: {req.note}</p>}
                 {req.admin_note && <p className="text-xs text-gray-500 mt-1">Respon: {req.admin_note}</p>}
@@ -123,7 +123,7 @@ const TopupRequests = () => {
                     <button
                       type="button"
                       onClick={() => setPreviewProofUrl(getMediaUrl(req.proof_image))}
-                      className="inline-flex items-center gap-1 text-xs text-primary-600 font-medium hover:underline bg-primary-50 px-2.5 py-1 rounded-lg hover:bg-primary-100"
+                      className="inline-flex items-center gap-1 text-xs text-teal-700 font-bold hover:underline bg-teal-50 px-2.5 py-1 rounded-lg hover:bg-teal-100 transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" /> Lihat Bukti
                     </button>

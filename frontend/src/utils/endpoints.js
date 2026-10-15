@@ -26,6 +26,7 @@ export const API_ENDPOINTS = {
     CATEGORIES: '/products/categories',
     SERVICES: '/products/services',
     REFRESH_CACHE: '/products/refresh-cache',
+    DETECT_OPERATOR: '/products/detect-operator',
     MARGINS: {
       LIST: '/products/margins',
       SET: (sku) => `/products/margins/${encodeURIComponent(sku)}`,
@@ -49,6 +50,14 @@ export const API_ENDPOINTS = {
     MARGIN: '/settings/margin',
     CONTACT: '/settings/contact',
     WHATSAPP: '/settings/whatsapp',
+    ANNOUNCEMENT: '/settings/announcement',
+  },
+  BANNERS: {
+    LIST: '/banners',
+    CREATE: '/banners',
+    UPDATE: (id) => `/banners/${id}`,
+    DELETE: (id) => `/banners/${id}`,
+    TOGGLE: (id) => `/banners/${id}/toggle`,
   },
   TOPUP_REQUESTS: {
     LIST: '/topup-requests',

@@ -123,8 +123,8 @@ const Balance = () => {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium ${
-                tab === t ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
+                tab === t ? 'bg-teal-600 text-white shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {t === 'topup' ? 'Topup Saldo' : 'Riwayat'}
@@ -151,7 +151,7 @@ const Balance = () => {
                       <p className="font-medium text-gray-900 truncate">{user.name}</p>
                       <p className="text-xs text-gray-500 truncate">{user.email}</p>
                       <p className="text-xs text-gray-400">{user.phone}</p>
-                      <p className="text-sm font-bold text-primary-600 mt-1">{formatCurrency(user.balance)}</p>
+                      <p className="text-sm font-bold text-teal-600 mt-1">{formatCurrency(user.balance)}</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <button
@@ -252,7 +252,7 @@ const Balance = () => {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium disabled:opacity-60"
+            className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white py-3 rounded-xl font-bold shadow-md disabled:opacity-60 transition-all"
           >
             {saving ? 'Memproses...' : 'Simpan'}
           </button>

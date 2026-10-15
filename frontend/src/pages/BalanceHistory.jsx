@@ -50,7 +50,7 @@ const BalanceHistory = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-medium text-sm text-gray-900">{typeLabels[item.type]}</p>
-                    <p className="text-lg font-bold text-primary-600">{formatCurrency(item.amount)}</p>
+                    <p className="text-lg font-bold text-teal-600">{formatCurrency(item.amount)}</p>
                   </div>
                   <span className="text-xs text-gray-400">{formatDate(item.created_at)}</span>
                 </div>

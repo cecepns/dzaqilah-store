@@ -154,7 +154,7 @@ const Users = () => {
               key={r.id || 'all'}
               onClick={() => { setRoleFilter(r.id); setPagination((p) => ({ ...p, page: 1 })); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
-                roleFilter === r.id ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+                roleFilter === r.id ? 'bg-teal-600 text-white font-bold shadow-xs' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {r.label}
@@ -273,7 +273,7 @@ const Users = () => {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium disabled:opacity-60"
+            className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white py-3 rounded-xl font-bold shadow-md disabled:opacity-60 transition-all"
           >
             {saving ? 'Menyimpan...' : 'Simpan'}
           </button>
@@ -300,7 +300,7 @@ const Users = () => {
               type="password"
               value={resetPassword}
               onChange={(e) => setResetPassword(e.target.value)}
-              className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
               placeholder="Minimal 6 karakter"
             />
           </div>
@@ -328,7 +328,7 @@ const Users = () => {
               }
             }}
             disabled={resetSaving}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium disabled:opacity-60"
+            className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white py-3 rounded-xl font-bold shadow-md disabled:opacity-60 transition-all"
           >
             {resetSaving ? 'Menyimpan...' : 'Simpan Password Baru'}
           </button>

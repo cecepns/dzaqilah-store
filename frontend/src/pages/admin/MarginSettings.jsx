@@ -114,15 +114,15 @@ const MarginSettings = () => {
             <div className="bg-white border rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Percent className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center">
+                    <Percent className="w-5 h-5 text-teal-600" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-medium">Margin Member (Konsumen)</p>
-                    <p className="text-2xl font-bold text-blue-600">{currentMargin}%</p>
+                    <p className="text-2xl font-bold text-teal-600">{currentMargin}%</p>
                   </div>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
                   User Biasa
                 </span>
               </div>
@@ -140,7 +140,7 @@ const MarginSettings = () => {
                   step="0.5"
                   value={margin || 0}
                   onChange={(e) => setMargin(e.target.value)}
-                  className="flex-1 accent-blue-600"
+                  className="flex-1 accent-teal-600"
                 />
                 <input
                   type="number"
@@ -149,7 +149,7 @@ const MarginSettings = () => {
                   step="0.5"
                   value={margin}
                   onChange={(e) => setMargin(e.target.value)}
-                  className="w-20 px-3 py-2 border rounded-xl text-center text-sm font-bold text-blue-700"
+                  className="w-20 px-3 py-2 border rounded-xl text-center text-sm font-bold text-teal-700"
                 />
               </div>
 
@@ -161,7 +161,7 @@ const MarginSettings = () => {
                     onClick={() => setMargin(String(preset))}
                     className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                       parseFloat(margin) === preset
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-teal-600 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -184,7 +184,7 @@ const MarginSettings = () => {
                   </div>
                 </div>
                 <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  💎 Akun Reseller
+                  Akun Reseller
                 </span>
               </div>
 
@@ -245,10 +245,10 @@ const MarginSettings = () => {
                   <span className="font-semibold">{formatCurrency(exampleModal)}</span>
                 </div>
                 <div className="border-t pt-2 grid grid-cols-2 gap-3">
-                  <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-100">
-                    <p className="text-[11px] font-semibold text-blue-900 mb-1">Harga Member ({previewMemberMargin}%)</p>
-                    <p className="text-base font-bold text-blue-700">{formatCurrency(previewMemberSelling)}</p>
-                    <p className="text-[10px] text-blue-600 mt-0.5">Profit: +{formatCurrency(previewMemberProfit)}</p>
+                  <div className="p-2.5 rounded-lg bg-teal-50/60 border border-teal-100">
+                    <p className="text-[11px] font-semibold text-teal-900 mb-1">Harga Member ({previewMemberMargin}%)</p>
+                    <p className="text-base font-bold text-teal-700">{formatCurrency(previewMemberSelling)}</p>
+                    <p className="text-[10px] text-teal-600 mt-0.5">Profit: +{formatCurrency(previewMemberProfit)}</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100">
                     <p className="text-[11px] font-semibold text-emerald-900 mb-1">Harga Reseller ({previewResellerMargin}%)</p>

@@ -98,7 +98,7 @@ const Transactions = () => {
               key={s || 'all'}
               onClick={() => { setStatus(s); setPagination((p) => ({ ...p, page: 1 })); }}
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                status === s ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600'
+                status === s ? 'bg-teal-600 text-white shadow-xs font-bold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               {s ? statusLabels[s] : 'Semua'}
@@ -125,7 +125,7 @@ const Transactions = () => {
                 </div>
 
                 <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="font-bold text-primary-600 whitespace-nowrap">{formatCurrency(tx.selling_price)}</span>
+                  <span className="font-bold text-teal-600 whitespace-nowrap">{formatCurrency(tx.selling_price)}</span>
                   <span className="text-gray-400 text-xs shrink-0 whitespace-nowrap">{formatDate(tx.created_at)}</span>
                 </div>
 

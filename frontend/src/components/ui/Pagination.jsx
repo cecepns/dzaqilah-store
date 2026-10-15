@@ -40,8 +40,8 @@ const Pagination = ({ pagination, onPageChange, onLimitChange, showLimitSelect =
           <button
             key={p}
             onClick={() => onPageChange(p)}
-            className={`w-9 h-9 rounded-lg text-sm font-medium ${
-              p === page ? 'bg-primary-600 text-white' : 'border hover:bg-gray-50'
+            className={`w-9 h-9 rounded-lg text-sm font-bold transition-all ${
+              p === page ? 'bg-teal-600 text-white shadow-xs' : 'border border-gray-200 hover:border-teal-300 hover:text-teal-700 bg-white'
             }`}
           >
             {p}

@@ -324,7 +324,7 @@ const TopupRequest = () => {
           <button
             type="submit"
             disabled={submitting || hasPending || compressing}
-            className="w-full bg-primary-600 text-white py-3 rounded-xl font-medium disabled:opacity-60 flex items-center justify-center gap-2 hover:bg-primary-700 transition-colors shadow-sm"
+            className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-700 hover:to-cyan-700 text-white py-3 rounded-xl font-bold disabled:opacity-60 flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
           >
             {submitting ? (
               <LoadingSpinner size="sm" className="text-white" />
@@ -339,7 +339,7 @@ const TopupRequest = () => {
             <button
               type="button"
               onClick={() => openWhatsApp()}
-              className="w-full bg-green-500 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-green-600 transition-colors shadow-sm"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99]"
             >
               <WhatsAppIcon className="w-5 h-5" />
               Chat Admin via WhatsApp

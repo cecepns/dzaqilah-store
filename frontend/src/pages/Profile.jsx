@@ -116,13 +116,13 @@ const Profile = () => {
       <div className="px-4 -mt-4 space-y-4">
         <div className="bg-white rounded-2xl border p-4">
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-              <User className="w-8 h-8 text-primary-600" />
+            <div className="w-16 h-16 bg-gradient-to-tr from-teal-600 to-cyan-600 rounded-full flex items-center justify-center shadow-md text-white flex-shrink-0">
+              <User className="w-8 h-8 text-white" />
             </div>
             <div>
               <h2 className="font-bold text-gray-900 text-base">{user?.name}</h2>
               <span className={`inline-block px-2.5 py-0.5 text-xs rounded-full font-semibold mt-1 ${roleBadgeStyles[user?.role] || roleBadgeStyles.user}`}>
-                {user?.role === 'reseller' && '💎 '}{roleLabels[user?.role] || 'Member'}
+                {roleLabels[user?.role] || 'Member'}
               </span>
               {isReseller && (
                 <p className="text-[11px] text-emerald-600 font-medium mt-1">Harga khusus reseller aktif</p>
@@ -139,7 +139,7 @@ const Profile = () => {
           <button
             type="button"
             onClick={handleOpenChangePassword}
-            className="mt-4 inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-primary-100 rounded-xl text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100"
+            className="mt-4 inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-teal-200 rounded-xl text-sm font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 transition-colors"
           >
             <KeyRound className="w-4 h-4" />
             Ganti Password
@@ -148,7 +148,7 @@ const Profile = () => {
 
         <div className="bg-white rounded-2xl border p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Store className="w-5 h-5 text-primary-600" />
+            <Store className="w-5 h-5 text-teal-600" />
             <div>
               <h3 className="font-semibold text-gray-900 text-sm">Nama Mitra</h3>
               <p className="text-xs text-gray-500">Muncul di struk transaksi & saat dibagikan</p>
@@ -161,13 +161,13 @@ const Profile = () => {
               onChange={(e) => setPartnerName(e.target.value)}
               placeholder="Contoh: Toko Jaya Cell"
               maxLength={100}
-              className="flex-1 px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="flex-1 px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
             <button
               type="button"
               onClick={handleSavePartnerName}
               disabled={savingPartner}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-teal-600 to-cyan-600 text-white rounded-xl text-sm font-bold hover:from-teal-700 hover:to-cyan-700 disabled:opacity-50 transition-all shadow-xs"
             >
               <Save className="w-4 h-4" />
               {savingPartner ? '...' : 'Simpan'}
