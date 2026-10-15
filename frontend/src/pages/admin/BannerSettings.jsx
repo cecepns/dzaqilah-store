@@ -257,7 +257,7 @@ const BannerSettings = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header
         title="Banner & Pengumuman"
         subtitle="Kelola banner promo beranda & teks berjalan"
@@ -268,7 +268,7 @@ const BannerSettings = () => {
         }
       />
 
-      <div className="px-4 -mt-4 space-y-4">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-4">
         {/* Navigation Tabs */}
         <div className="flex bg-gray-200/80 p-1 rounded-2xl">
           <button

@@ -88,10 +88,10 @@ const MarginSettings = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Pengaturan Margin & Kontak" subtitle="Harga Member & Reseller" />
 
-      <div className="px-4 -mt-4 space-y-4">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-4">
         {loading ? (
           <div className="flex justify-center py-12"><LoadingSpinner /></div>
         ) : (

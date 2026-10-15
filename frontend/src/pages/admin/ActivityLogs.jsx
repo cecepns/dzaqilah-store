@@ -59,10 +59,10 @@ const ActivityLogs = () => {
   }, [debouncedSearch, pagination.page, pagination.limit]);
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Log Aktivitas" subtitle="Semua aktivitas sistem" />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Cari aktivitas..." />
 
         {loading ? (

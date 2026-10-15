@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import MobileLayout from './components/layout/MobileLayout';
+import ScrollToTop from './components/layout/ScrollToTop';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Home from './pages/Home';
@@ -23,6 +24,7 @@ import BannerSettings from './pages/admin/BannerSettings';
 const App = () => (
   <AuthProvider>
     <BrowserRouter>
+      <ScrollToTop />
       <Toaster
         position="top-center"
         toastOptions={{

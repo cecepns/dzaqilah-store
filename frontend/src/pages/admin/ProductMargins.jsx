@@ -160,7 +160,7 @@ const ProductMargins = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header
         title="Margin Produk"
         subtitle="Atur margin Member & Reseller per item"
@@ -171,7 +171,7 @@ const ProductMargins = () => {
         }
       />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         {/* Info Global Margins */}
         <div className="bg-white border rounded-2xl p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">

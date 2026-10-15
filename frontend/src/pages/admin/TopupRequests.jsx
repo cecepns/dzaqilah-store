@@ -73,10 +73,10 @@ const TopupRequests = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Request Topup" subtitle="Kelola permintaan topup saldo user" />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Cari user..." />
 
         <div className="flex gap-2 overflow-x-auto">

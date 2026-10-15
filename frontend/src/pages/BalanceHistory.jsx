@@ -35,10 +35,10 @@ const BalanceHistory = () => {
   }, [pagination.page, pagination.limit]);
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Riwayat Saldo" subtitle="Perubahan saldo Anda" />
 
-      <div className="px-4 -mt-4">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         {loading ? (
           <div className="flex justify-center py-12"><LoadingSpinner /></div>
         ) : history.length === 0 ? (

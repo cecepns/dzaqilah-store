@@ -114,10 +114,10 @@ const Balance = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Manajemen Saldo" subtitle="Topup & kelola saldo user" />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         <div className="flex gap-2">
           {['topup', 'history'].map((t) => (
             <button

@@ -442,6 +442,8 @@ const matchPrepaidService = (product, service) => {
     case 'pln':
       return isPlnPrepaidProduct(product);
     case 'ewallet':
+    case 'emoney':
+    case 'e-money':
       return isEwalletProduct(product);
     default:
       return true;

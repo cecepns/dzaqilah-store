@@ -325,7 +325,7 @@ const ServiceProducts = () => {
                     }`}
                 >
                   {brandLogo && (
-                    <img src={brandLogo} alt={brand} className="w-3.5 h-3.5 object-contain rounded-full bg-white p-0.5 flex-shrink-0" />
+                    <img src={brandLogo} alt={brand} className="w-4 h-4 object-contain rounded bg-white p-0.5 flex-shrink-0" />
                   )}
                   <span>{brand}</span>
                 </button>

@@ -10,6 +10,8 @@ import logoAxis from '../assets/operator/axis.png';
 import logoTri from '../assets/operator/3.png';
 import logoSmartfren from '../assets/operator/smartfren.png';
 import logoByu from '../assets/operator/byu.png';
+import logoDana from '../assets/e-money/dana.png';
+import logoOvo from '../assets/e-money/ovo.png';
 
 export const OPERATOR_LOGOS = {
   telkomsel: logoTelkomsel,
@@ -19,6 +21,8 @@ export const OPERATOR_LOGOS = {
   tri: logoTri,
   smartfren: logoSmartfren,
   byu: logoByu,
+  dana: logoDana,
+  ovo: logoOvo,
 };
 
 export const OPERATOR_LIST = [
@@ -162,6 +166,11 @@ export const getOperatorLogo = (brandOrName) => {
   if (!brandOrName) return null;
   const str = String(brandOrName).toLowerCase().trim();
 
+  // E-Money / E-Wallet brand assets
+  if (str.includes('dana')) return logoDana;
+  if (str.includes('ovo')) return logoOvo;
+
+  // Telco Operator brand assets
   if (str.includes('byu') || str.includes('by.u')) return logoByu;
   if (str.includes('telkomsel') || str.includes('simpati') || str.includes('kartu as') || str.includes('loop')) return logoTelkomsel;
   if (str.includes('indosat') || str.includes('im3') || str.includes('mentari') || str.includes('ooredoo')) return logoIndosat;
@@ -172,6 +181,8 @@ export const getOperatorLogo = (brandOrName) => {
 
   return null;
 };
+
+export const getProductBrandLogo = getOperatorLogo;
 
 /**
  * Find matching brand in list of API brands based on detected operator

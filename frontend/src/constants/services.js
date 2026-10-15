@@ -155,4 +155,9 @@ export const SERVICES = [
   },
 ];
 
-export const getServiceById = (id) => SERVICES.find((s) => s.id === id) || SERVICES[0];
+export const getServiceById = (id) => {
+  if (id === 'emoney' || id === 'e-money') {
+    return SERVICES.find((s) => s.id === 'ewallet') || SERVICES[0];
+  }
+  return SERVICES.find((s) => s.id === id) || SERVICES[0];
+};

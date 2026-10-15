@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, PlusCircle, Store, Save, KeyRound, Package } from 'lucide-react';
+import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, PlusCircle, Store, Save, KeyRound, Package, Megaphone } from 'lucide-react';
 import { get, post, getErrorMessage } from '../utils/request';
 import { API_ENDPOINTS } from '../utils/endpoints';
 import toast from 'react-hot-toast';
@@ -99,6 +99,7 @@ const Profile = () => {
   const menuItems = [
     ...(isAdmin ? [
       { icon: Shield, label: 'Panel Admin', to: '/admin/users' },
+      { icon: Megaphone, label: 'Banner & Pengumuman', to: '/admin/banners' },
       { icon: Percent, label: 'Pengaturan Aplikasi', to: '/admin/margin' },
       { icon: Package, label: 'Margin Per Produk', to: '/admin/product-margins' },
       { icon: PlusCircle, label: 'Request Topup User', to: '/admin/topup-requests' },

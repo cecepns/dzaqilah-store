@@ -32,6 +32,7 @@ import {
   Megaphone,
   HelpCircle,
   ShieldCheck,
+  BellOff,
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -105,6 +106,7 @@ const Home = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [contactData, setContactData] = useState(null);
 
   const fetchDashboardData = async (isManual = false) => {
@@ -240,12 +242,14 @@ const Home = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setIsContactOpen(true)}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white relative"
-                title="Bantuan CS"
+                onClick={() => setIsNotificationOpen(true)}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white relative inline-flex items-center justify-center"
+                title="Papan Pengumuman & Notifikasi"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-400 ring-2 ring-teal-800" />
+                {announcement?.isActive && announcement?.text?.trim() && (
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-400 ring-2 ring-teal-800" />
+                )}
               </button>
             </div>
           </div>
@@ -263,17 +267,6 @@ const Home = () => {
                 }`}
             >
               TRANSAKSI
-            </button>
-            <div className="w-[1px] h-4 bg-white/30" />
-            <button
-              type="button"
-              onClick={() => handleTabClick('menu-agen')}
-              className={`flex-1 py-2.5 px-3 text-center border-b-2 whitespace-nowrap transition-all ${activeTab === 'menu-agen'
-                ? 'border-white bg-white/15 text-white'
-                : 'border-transparent text-white/85 hover:text-white'
-                }`}
-            >
-              MENU AGEN
             </button>
             <div className="w-[1px] h-4 bg-white/30" />
             <button
@@ -347,31 +340,23 @@ const Home = () => {
 
           {/* Card Bottom 3 Columns: Komisi, Poin/Level, + Kredit */}
           <div className="grid grid-cols-3 divide-x divide-gray-100 text-center py-2.5 bg-white">
-            <button
-              type="button"
-              onClick={() => setIsAgentMenuOpen(true)}
-              className="px-2 py-1 flex flex-col items-center justify-center hover:bg-gray-50 active:scale-95 transition-all group"
-            >
+            <div className="px-2 py-1 flex flex-col items-center justify-center">
               <div className="flex items-center gap-1 text-teal-600 mb-0.5">
                 <Coins className="w-3.5 h-3.5 text-amber-500" />
-                <span className="font-bold text-xs text-gray-900 group-hover:text-teal-600">0</span>
+                <span className="font-bold text-xs text-gray-900">0</span>
               </div>
               <span className="text-[10px] text-gray-500 font-medium">Komisi</span>
-            </button>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setIsAgentMenuOpen(true)}
-              className="px-2 py-1 flex flex-col items-center justify-center hover:bg-gray-50 active:scale-95 transition-all group"
-            >
+            <div className="px-2 py-1 flex flex-col items-center justify-center">
               <div className="flex items-center gap-1 text-teal-600 mb-0.5">
                 <Award className="w-3.5 h-3.5 text-orange-500" />
-                <span className="font-bold text-xs text-gray-900 group-hover:text-teal-600">
+                <span className="font-bold text-xs text-gray-900">
                   {isReseller ? 'Reseller' : 'Member'}
                 </span>
               </div>
               <span className="text-[10px] text-gray-500 font-medium">Level Agen</span>
-            </button>
+            </div>
 
             <Link
               to="/request-topup"
@@ -388,7 +373,7 @@ const Home = () => {
 
         {/* ─── Banner Carousel (Promo Slider) ─── */}
         {banners.length > 0 && (
-          <div className="relative rounded-2xl overflow-hidden shadow-sm border border-gray-200/80 bg-slate-900 aspect-[16/9] group">
+          <div className="relative isolate rounded-2xl overflow-hidden shadow-sm border border-gray-200/80 bg-slate-900 aspect-[16/9] group">
             {banners.map((banner, index) => {
               const hasText = banner.show_text !== false && banner.show_text !== 0 && (banner.title || banner.subtitle || banner.description || banner.badge);
               const title = banner.title;
@@ -450,7 +435,7 @@ const Home = () => {
 
             {/* Carousel Dot Indicators */}
             {banners.length > 1 && (
-              <div className="absolute bottom-2 right-3 z-30 flex items-center gap-1.5 bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-full">
+              <div className="absolute bottom-2 right-3 z-20 flex items-center gap-1.5 bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-full">
                 {banners.map((_, i) => (
                   <button
                     key={i}
@@ -656,6 +641,60 @@ const Home = () => {
         </div>
       </Modal>
 
+      {/* ─── Modal Pengumuman (Notifikasi) ─── */}
+      <Modal
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        title="Pengumuman & Informasi"
+      >
+        <div className="space-y-4">
+          <div className="text-center py-2">
+            <div className="w-14 h-14 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-2 shadow-xs border border-teal-100">
+              <Megaphone className="w-7 h-7 text-teal-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 text-sm">Papan Pengumuman Agen</h3>
+            <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+              Informasi penting, jadwal pemeliharaan server, dan update promo dari Dzaqilah Cell.
+            </p>
+          </div>
+
+          {announcement?.isActive && announcement?.text?.trim() ? (
+            <div className="bg-gradient-to-br from-teal-50/90 to-cyan-50/70 border border-teal-200/90 rounded-2xl p-4 shadow-xs">
+              <div className="flex items-center justify-between mb-2 pb-2 border-b border-teal-100">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-700 text-white shadow-2xs">
+                  <Megaphone className="w-3 h-3 text-orange-300" />
+                  PENGUMUMAN RESMI
+                </span>
+                <span className="text-[10px] text-teal-700 font-semibold bg-teal-100/80 px-2 py-0.5 rounded-md">
+                  Aktif
+                </span>
+              </div>
+              <p className="text-xs text-gray-800 leading-relaxed font-medium whitespace-pre-line">
+                {announcement.text}
+              </p>
+            </div>
+          ) : (
+            <div className="py-8 text-center bg-gray-50/80 rounded-2xl border border-gray-100 p-4">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2 text-gray-400">
+                <BellOff className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-gray-700">Belum ada pengumuman</p>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
+                Saat ini belum ada pengumuman terbaru dari admin. Semua sistem dan transaksi beroperasi normal.
+              </p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsNotificationOpen(false)}
+            className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 active:scale-[0.98] text-gray-700 font-bold rounded-xl text-xs transition-all"
+          >
+            Tutup
+          </button>
+        </div>
+      </Modal>
+
       {/* ─── Modal Hubungi Kami ─── */}
       <Modal
         isOpen={isContactOpen}
@@ -799,6 +838,30 @@ const Home = () => {
                   <Users className="w-4 h-4" />
                   <span>Profil Akun</span>
                 </Link>
+
+                {isAdmin && (
+                  <div className="pt-2 border-t border-gray-100 space-y-1">
+                    <p className="px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Panel Admin
+                    </p>
+                    <Link
+                      to="/admin/banners"
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-pink-700 bg-pink-50 hover:bg-pink-100"
+                    >
+                      <Megaphone className="w-4 h-4 text-pink-600" />
+                      <span>Banner & Pengumuman</span>
+                    </Link>
+                    <Link
+                      to="/admin/users"
+                      onClick={() => setIsSidebarOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <span>Kelola Users & Saldo</span>
+                    </Link>
+                  </div>
+                )}
               </nav>
             </div>
 

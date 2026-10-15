@@ -128,7 +128,7 @@ const Users = () => {
   };
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header
         title="Manajemen Users"
         subtitle="Kelola pengguna aplikasi"
@@ -139,7 +139,7 @@ const Users = () => {
         }
       />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-4 pt-4 space-y-3">
         <SearchInput value={search} onChange={setSearch} placeholder="Cari user..." />
 
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
