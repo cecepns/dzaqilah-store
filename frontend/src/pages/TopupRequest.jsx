@@ -170,10 +170,10 @@ const TopupRequest = () => {
   const hasPending = requests.some((r) => r.status === 'pending');
 
   return (
-    <div>
-      <Header title="Request Topup Saldo" subtitle={`Saldo: ${formatCurrency(user?.balance)}`} />
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <Header title="Request Topup Saldo" subtitle={`Dzaqilah Cell • Saldo: ${formatCurrency(user?.balance)}`} />
 
-      <div className="px-4 -mt-4 space-y-4">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-4">
         <form onSubmit={handleSubmit} className="bg-white border rounded-2xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center gap-3 mb-1">
             <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">

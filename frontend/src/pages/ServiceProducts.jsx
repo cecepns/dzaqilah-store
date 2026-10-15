@@ -264,14 +264,14 @@ const ServiceProducts = () => {
   }
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header
         title={service.label}
         subtitle={`Dzaqilah Cell • Saldo: ${formatCurrency(user?.balance)}`}
         backTo="/layanan"
       />
 
-      <div className="px-4 -mt-4 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         {isReseller && (
           <div className="flex items-center gap-2.5 p-3 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl shadow-xs text-emerald-800 text-xs">
             <div className="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">

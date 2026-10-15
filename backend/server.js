@@ -17,8 +17,13 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 // Folder uploads sesuai AGENTS.md (uploads-[nama-project])
 const uploadsRootDir = path.join(__dirname, 'uploads-raca-cell');
 const topupUploadDir = path.join(uploadsRootDir, 'topup');
+const bannersUploadDir = path.join(uploadsRootDir, 'banners');
+
 if (!fs.existsSync(topupUploadDir)) {
   fs.mkdirSync(topupUploadDir, { recursive: true });
+}
+if (!fs.existsSync(bannersUploadDir)) {
+  fs.mkdirSync(bannersUploadDir, { recursive: true });
 }
 
 // Margin default hanya dipakai saat pertama kali seed database.
@@ -41,7 +46,11 @@ let pascaPriceListCache = { data: null, fetchedAt: 0 };
 const EWALLET_KEYWORDS = ['dana', 'ovo', 'gopay', 'go pay', 'shopeepay', 'shopee pay', 'linkaja', 'grabpay', 'grab pay', 'maxim'];
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadsRootDir));
 app.use('/api/uploads', express.static(uploadsRootDir));
@@ -71,6 +80,24 @@ const uploadTopupProof = multer({
   storage: topupStorage,
   fileFilter: topupUploadFilter,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB backend safety limit
+});
+
+// Konfigurasi Multer untuk Banner Promo
+const bannerStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, bannersUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `banner-${uniqueSuffix}${ext}`);
+  },
+});
+
+const uploadBannerImage = multer({
+  storage: bannerStorage,
+  fileFilter: topupUploadFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB safety limit
 });
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -823,6 +850,56 @@ const initDatabase = async () => {
       if (err.code !== 'ER_DUP_FIELDNAME') console.error('Failed to add reseller_margin_percent to product_margins:', err.message);
     }
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS banners (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NULL,
+        description TEXT NULL,
+        badge VARCHAR(100) NULL,
+        image_url VARCHAR(500) NOT NULL,
+        action_url VARCHAR(500) NULL,
+        show_text BOOLEAN NOT NULL DEFAULT TRUE,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_banners_active (is_active, sort_order)
+      )
+    `);
+
+    const [existingBanners] = await connection.query('SELECT id FROM banners LIMIT 1');
+    if (!existingBanners.length) {
+      await connection.query(`
+        INSERT INTO banners (title, description, badge, image_url, action_url, show_text, is_active, sort_order) VALUES
+        ('QRIS Static Untuk Usahamu', 'MDR 0% & Pencairan Realtime', 'Fitur Unggulan', '/banners/promo_qris.jpg', '/request-topup', 1, 1, 1),
+        ('Pulsa & Paket Data Termurah', 'Semua Operator Kilat 24 Jam', 'Diskon Spesial', '/banners/promo_pulsa.jpg', '/layanan/pulsa', 1, 1, 2)
+      `);
+    }
+
+    try {
+      await connection.query('ALTER TABLE settings MODIFY COLUMN setting_value TEXT NOT NULL');
+    } catch (_) {}
+
+    const [announcementSetting] = await connection.query(
+      "SELECT id FROM settings WHERE setting_key = 'announcement_text' LIMIT 1"
+    );
+    if (!announcementSetting.length) {
+      await connection.query(
+        "INSERT INTO settings (setting_key, setting_value) VALUES ('announcement_text', ?)",
+        ['Selamat datang di Dzaqilah Cell! Layanan pulsa, paket data, & PPOB beroperasi 24 jam nonstop. Deposit instan otomatis via QRIS. Hubungi CS jika ada kendala.']
+      );
+    }
+    const [announcementActiveSetting] = await connection.query(
+      "SELECT id FROM settings WHERE setting_key = 'announcement_active' LIMIT 1"
+    );
+    if (!announcementActiveSetting.length) {
+      await connection.query(
+        "INSERT INTO settings (setting_key, setting_value) VALUES ('announcement_active', 'true')"
+      );
+    }
+
     const [owners] = await connection.query("SELECT id FROM users WHERE role = 'owner' LIMIT 1");
     if (!owners.length) {
       const hashed = await bcrypt.hash('password123', 10);
@@ -1287,6 +1364,14 @@ app.get('/api/products/prepaid', authenticate, async (req, res) => {
       );
     }
 
+    // Sort by selling price ascending (cheapest to most expensive) by default
+    const sortOrder = req.query.sort?.toLowerCase() === 'desc' ? 'desc' : 'asc';
+    data.sort((a, b) => {
+      const priceA = parseFloat(a.selling_price ?? a.price ?? 0);
+      const priceB = parseFloat(b.selling_price ?? b.price ?? 0);
+      return sortOrder === 'desc' ? priceB - priceA : priceA - priceB;
+    });
+
     const { page, limit, offset } = getPagination(req.query);
     const total = data.length;
     const paginated = data.slice(offset, offset + limit);
@@ -1339,6 +1424,14 @@ app.get('/api/products/pasca', authenticate, async (req, res) => {
           p.buyer_sku_code.toLowerCase().includes(search)
       );
     }
+
+    // Sort by admin fee ascending by default
+    const sortOrder = req.query.sort?.toLowerCase() === 'desc' ? 'desc' : 'asc';
+    data.sort((a, b) => {
+      const adminA = parseFloat(a.admin ?? 0);
+      const adminB = parseFloat(b.admin ?? 0);
+      return sortOrder === 'desc' ? adminB - adminA : adminA - adminB;
+    });
 
     const { page, limit, offset } = getPagination(req.query);
     const total = data.length;
@@ -1409,6 +1502,42 @@ app.get('/api/products/brands', authenticate, async (req, res) => {
     res.status(502).json({ success: false, message: err.message || 'Gagal mengambil daftar brand' });
   }
 });
+
+const OPERATOR_PREFIX_MAP = [
+  { brand: 'TELKOMSEL', name: 'Telkomsel', prefixes: ['0811', '0812', '0813', '0821', '0822', '0823', '0851', '0852', '0853'] },
+  { brand: 'INDOSAT', name: 'Indosat Ooredoo', prefixes: ['0814', '0815', '0816', '0855', '0856', '0857', '0858'] },
+  { brand: 'XL', name: 'XL Axiata', prefixes: ['0817', '0818', '0819', '0859', '0877', '0878'] },
+  { brand: 'AXIS', name: 'AXIS', prefixes: ['0831', '0832', '0833', '0838'] },
+  { brand: 'TRI', name: 'Tri', prefixes: ['0895', '0896', '0897', '0898', '0899'] },
+  { brand: 'SMARTFREN', name: 'Smartfren', prefixes: ['0881', '0882', '0883', '0884', '0885', '0886', '0887', '0888', '0889'] },
+];
+
+app.get('/api/products/detect-operator', authenticate, (req, res) => {
+  let phone = String(req.query.phone || '').replace(/[^0-9+]/g, '');
+  if (phone.startsWith('+62')) phone = '0' + phone.slice(3);
+  else if (phone.startsWith('62')) phone = '0' + phone.slice(2);
+  phone = phone.replace(/[^0-9]/g, '');
+
+  if (phone.length < 4) {
+    return res.json({ success: true, data: null, message: 'Nomor telepon minimal 4 digit' });
+  }
+
+  const prefix4 = phone.slice(0, 4);
+  const match = OPERATOR_PREFIX_MAP.find((op) => op.prefixes.includes(prefix4));
+
+  res.json({
+    success: true,
+    data: match
+      ? {
+          brand: match.brand,
+          name: match.name,
+          prefix: prefix4,
+          phone,
+        }
+      : null,
+  });
+});
+
 
 app.get('/api/products/categories', authenticate, async (req, res) => {
   try {
@@ -2095,12 +2224,26 @@ app.post('/api/transactions/:id/check-status', authenticate, async (req, res) =>
 
 // ─── Digiflazz Webhook ─────────────────────────────────────────────────────
 // Daftarkan URL di panel Digiflazz: Pengaturan Koneksi API → Webhook
-// Contoh: https://api.kingcreativestudio.my.id/raca-cell/api/webhooks/digiflazz
+// URL: https://api.kingcreativestudio.my.id/dzaqilah-store/api/webhooks/digiflazz
+// Content-Type: application/json
+// Secret: (opsional / boleh dikosongkan atau disamakan dengan DIGIFLAZZ_WEBHOOK_SECRET)
 
-app.post('/api/webhooks/digiflazz', async (req, res) => {
+app.post(['/api/webhooks/digiflazz', '/webhooks/digiflazz'], async (req, res) => {
   const connection = await pool.getConnection();
   try {
     const event = req.headers['x-digiflazz-event'] || 'unknown';
+    const signature = req.headers['x-hub-signature'];
+    const webhookSecret = process.env.DIGIFLAZZ_WEBHOOK_SECRET;
+
+    // Verifikasi HMAC-SHA1 signature jika Secret dikonfigurasi
+    if (webhookSecret && signature) {
+      const rawPayload = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+      const expectedSig = 'sha1=' + crypto.createHmac('sha1', webhookSecret).update(rawPayload).digest('hex');
+      if (signature !== expectedSig) {
+        console.warn(`[webhook] Signature mismatch: diterima=${signature}, dihitung=${expectedSig}`);
+      }
+    }
+
     const payload = parseDigiflazzPayload(req.body);
     const refId = payload?.ref_id;
 
@@ -2573,6 +2716,266 @@ app.put('/api/settings/margin', authenticate, authorize('owner', 'admin'), async
     });
   } catch (err) {
     console.error(err);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+  }
+});
+
+// ─── Banners Routes ────────────────────────────────────────────────────────
+
+app.get('/api/banners', async (req, res) => {
+  let connection;
+  try {
+    connection = await pool.getConnection();
+    const isAll = req.query.all === 'true';
+    const sql = isAll
+      ? 'SELECT * FROM banners ORDER BY sort_order ASC, id DESC'
+      : 'SELECT * FROM banners WHERE is_active = 1 ORDER BY sort_order ASC, id DESC';
+    const [rows] = await connection.query(sql);
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Get banners error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data banner' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.post('/api/banners', authenticate, authorize('owner', 'admin'), uploadBannerImage.single('image'), async (req, res) => {
+  let connection;
+  try {
+    const { title, description, badge, action_url, sort_order } = req.body;
+    const show_text = req.body.show_text === 'true' || req.body.show_text === '1' || req.body.show_text === true;
+    const is_active = req.body.is_active === undefined ? true : (req.body.is_active === 'true' || req.body.is_active === '1' || req.body.is_active === true);
+
+    let image_url = '';
+    if (req.file) {
+      image_url = `/uploads/banners/${req.file.filename}`;
+    } else if (req.body.image_url) {
+      image_url = req.body.image_url.trim();
+    }
+
+    if (!image_url) {
+      return res.status(400).json({ success: false, message: 'File gambar banner wajib diunggah' });
+    }
+
+    connection = await pool.getConnection();
+    const [result] = await connection.query(
+      `INSERT INTO banners (title, description, badge, image_url, action_url, show_text, is_active, sort_order, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        title?.trim() || null,
+        description?.trim() || null,
+        badge?.trim() || null,
+        image_url,
+        action_url?.trim() || null,
+        show_text ? 1 : 0,
+        is_active ? 1 : 0,
+        parseInt(sort_order, 10) || 0,
+        req.user.id,
+      ]
+    );
+
+    const newBannerId = result.insertId;
+    const [newBanner] = await connection.query('SELECT * FROM banners WHERE id = ?', [newBannerId]);
+
+    await logActivity(
+      req.user.id,
+      'create_banner',
+      `Menambahkan banner baru: "${title || 'Banner tanpa teks'}"`,
+      { bannerId: newBannerId, title, image_url },
+      req.ip
+    );
+
+    res.status(201).json({ success: true, message: 'Banner berhasil ditambahkan', data: newBanner[0] });
+  } catch (err) {
+    console.error('Create banner error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal menambahkan banner' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), uploadBannerImage.single('image'), async (req, res) => {
+  let connection;
+  try {
+    const id = parseInt(req.params.id, 10);
+    connection = await pool.getConnection();
+
+    const [existing] = await connection.query('SELECT * FROM banners WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: 'Banner tidak ditemukan' });
+    }
+
+    const current = existing[0];
+    const title = req.body.title !== undefined ? (req.body.title?.trim() || null) : current.title;
+    const description = req.body.description !== undefined ? (req.body.description?.trim() || null) : current.description;
+    const badge = req.body.badge !== undefined ? (req.body.badge?.trim() || null) : current.badge;
+    const action_url = req.body.action_url !== undefined ? (req.body.action_url?.trim() || null) : current.action_url;
+    const show_text = req.body.show_text !== undefined
+      ? (req.body.show_text === 'true' || req.body.show_text === '1' || req.body.show_text === true ? 1 : 0)
+      : current.show_text;
+    const is_active = req.body.is_active !== undefined
+      ? (req.body.is_active === 'true' || req.body.is_active === '1' || req.body.is_active === true ? 1 : 0)
+      : current.is_active;
+    const sort_order = req.body.sort_order !== undefined
+      ? parseInt(req.body.sort_order, 10) || 0
+      : current.sort_order;
+
+    let image_url = current.image_url;
+    if (req.file) {
+      image_url = `/uploads/banners/${req.file.filename}`;
+      if (current.image_url && current.image_url.startsWith('/uploads/banners/')) {
+        const oldPath = path.join(uploadsRootDir, current.image_url.replace('/uploads/', ''));
+        if (fs.existsSync(oldPath)) {
+          try { fs.unlinkSync(oldPath); } catch (_) {}
+        }
+      }
+    } else if (req.body.image_url) {
+      image_url = req.body.image_url.trim();
+    }
+
+    await connection.query(
+      `UPDATE banners
+       SET title = ?, description = ?, badge = ?, image_url = ?, action_url = ?, show_text = ?, is_active = ?, sort_order = ?
+       WHERE id = ?`,
+      [title, description, badge, image_url, action_url, show_text, is_active, sort_order, id]
+    );
+
+    const [updated] = await connection.query('SELECT * FROM banners WHERE id = ?', [id]);
+
+    await logActivity(
+      req.user.id,
+      'update_banner',
+      `Memperbarui banner #${id}: "${title || 'Banner'}"`,
+      { bannerId: id, title, image_url },
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Banner berhasil diperbarui', data: updated[0] });
+  } catch (err) {
+    console.error('Update banner error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal memperbarui banner' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.delete('/api/banners/:id', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  let connection;
+  try {
+    const id = parseInt(req.params.id, 10);
+    connection = await pool.getConnection();
+
+    const [existing] = await connection.query('SELECT * FROM banners WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: 'Banner tidak ditemukan' });
+    }
+
+    const current = existing[0];
+    await connection.query('DELETE FROM banners WHERE id = ?', [id]);
+
+    if (current.image_url && current.image_url.startsWith('/uploads/banners/')) {
+      const oldPath = path.join(uploadsRootDir, current.image_url.replace('/uploads/', ''));
+      if (fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch (_) {}
+      }
+    }
+
+    await logActivity(
+      req.user.id,
+      'delete_banner',
+      `Menghapus banner #${id} (${current.title || current.image_url})`,
+      { bannerId: id },
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Banner berhasil dihapus' });
+  } catch (err) {
+    console.error('Delete banner error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal menghapus banner' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+app.put('/api/banners/:id/toggle', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  let connection;
+  try {
+    const id = parseInt(req.params.id, 10);
+    connection = await pool.getConnection();
+
+    const [existing] = await connection.query('SELECT * FROM banners WHERE id = ?', [id]);
+    if (!existing.length) {
+      return res.status(404).json({ success: false, message: 'Banner tidak ditemukan' });
+    }
+
+    const newStatus = existing[0].is_active ? 0 : 1;
+    await connection.query('UPDATE banners SET is_active = ? WHERE id = ?', [newStatus, id]);
+
+    res.json({
+      success: true,
+      message: `Banner berhasil ${newStatus ? 'diaktifkan' : 'dinonaktifkan'}`,
+      is_active: Boolean(newStatus),
+    });
+  } catch (err) {
+    console.error('Toggle banner error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengubah status banner' });
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
+// ─── Announcement / Papan Pengumuman Routes ─────────────────────────────────
+
+app.get('/api/settings/announcement', async (req, res) => {
+  try {
+    const text = await getSetting(
+      'announcement_text',
+      'Selamat datang di Dzaqilah Cell! Layanan pulsa, paket data, & PPOB beroperasi 24 jam nonstop. Deposit instan otomatis via QRIS. Hubungi CS jika ada kendala.'
+    );
+    const activeStr = await getSetting('announcement_active', 'true');
+    res.json({
+      success: true,
+      data: {
+        text,
+        is_active: activeStr === 'true',
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+  }
+});
+
+app.put('/api/settings/announcement', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  try {
+    const { text, is_active } = req.body;
+    const cleanText = String(text ?? '').trim();
+    const activeVal =
+      is_active === true || is_active === 'true' || is_active === 1 || is_active === '1'
+        ? 'true'
+        : 'false';
+
+    await setSetting('announcement_text', cleanText, req.user.id);
+    await setSetting('announcement_active', activeVal, req.user.id);
+
+    await logActivity(
+      req.user.id,
+      'update_announcement',
+      `Mengubah papan pengumuman (status aktif: ${activeVal})`,
+      { text: cleanText, is_active: activeVal === 'true' },
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: 'Papan pengumuman berhasil disimpan',
+      data: {
+        text: cleanText,
+        is_active: activeVal === 'true',
+      },
+    });
+  } catch (err) {
+    console.error('Update announcement error:', err.message);
     res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
   }
 });

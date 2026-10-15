@@ -110,10 +110,10 @@ const Profile = () => {
   ];
 
   return (
-    <div>
+    <div className="min-h-screen bg-gray-50 pb-20">
       <Header title="Profil" subtitle="Informasi akun Anda" />
 
-      <div className="px-4 -mt-4 space-y-4">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-4">
         <div className="bg-white rounded-2xl border p-4">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-16 h-16 bg-gradient-to-tr from-teal-600 to-cyan-600 rounded-full flex items-center justify-center shadow-md text-white flex-shrink-0">

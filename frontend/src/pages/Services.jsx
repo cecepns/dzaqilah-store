@@ -31,7 +31,7 @@ const Services = () => {
         subtitle={`Dzaqilah Cell • Saldo: ${formatCurrency(user?.balance)}`}
       />
 
-      <div className="max-w-mobile mx-auto px-3.5 -mt-3.5 space-y-3">
+      <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
         {loading ? (
           <div className="flex justify-center py-16"><LoadingSpinner /></div>
         ) : (

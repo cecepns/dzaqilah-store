@@ -15,7 +15,7 @@ fi
 
 echo "Running migrations..."
 
-for file in "$DIR"/000_create_database.sql "$DIR"/001_initial_schema.sql "$DIR"/002_add_settings_table.sql "$DIR"/003_add_topup_requests_and_admin_wa.sql; do
+for file in $(ls "$DIR"/[0-9]*.sql | sort -V); do
   if [ -f "$file" ]; then
     echo "-> $(basename "$file")"
     $MYSQL_CMD < "$file"

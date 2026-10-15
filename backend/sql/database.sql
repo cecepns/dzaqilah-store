@@ -163,5 +163,25 @@ CREATE TABLE IF NOT EXISTS pasca_inquiries (
   INDEX idx_pasca_inquiry_expires (expires_at)
 );
 
+-- ─── 005: Banner & Papan Pengumuman Support ─────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS banners (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NULL,
+  description TEXT NULL,
+  badge VARCHAR(100) NULL,
+  image_url VARCHAR(500) NOT NULL,
+  action_url VARCHAR(500) NULL,
+  show_text BOOLEAN NOT NULL DEFAULT TRUE,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_banners_active (is_active, sort_order)
+);
+
 -- Default owner dibuat otomatis saat server pertama kali dijalankan
 -- Email: owner@racacell.com | Password: password123
+
