@@ -216,7 +216,15 @@ const ApiSettings = () => {
     setTestingDigiflazz(true);
     setTestResult(null);
     try {
-      const res = await post(API_ENDPOINTS.SETTINGS.TEST_DIGIFLAZZ);
+      const payload = {};
+      if (digiflazzForm.username && digiflazzForm.username.trim()) {
+        payload.username = digiflazzForm.username.trim();
+      }
+      if (digiflazzForm.api_key && digiflazzForm.api_key.trim()) {
+        payload.api_key = digiflazzForm.api_key.trim();
+      }
+
+      const res = await post(API_ENDPOINTS.SETTINGS.TEST_DIGIFLAZZ, payload);
       setTestResult({
         success: true,
         message: res.message || 'Koneksi ke Digiflazz berhasil!',
@@ -234,6 +242,7 @@ const ApiSettings = () => {
       setTestingDigiflazz(false);
     }
   };
+
 
   if (!isOwner) {
     return (

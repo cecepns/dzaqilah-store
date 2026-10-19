@@ -310,8 +310,20 @@ const callDigiflazz = async (endpoint, body) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return response.json();
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error(`Digiflazz non-JSON response from ${endpoint} (status ${response.status}):`, text.slice(0, 300));
+    return {
+      data: {
+        message: `Digiflazz HTTP ${response.status}: ${text.slice(0, 150)}`,
+        rc: String(response.status),
+      },
+    };
+  }
 };
+
 
 const fetchDigiflazzPriceListFromApi = async () => {
   const result = await callDigiflazz('/price-list', {
@@ -4272,36 +4284,62 @@ app.put('/api/settings/providers', authenticate, authorize('owner'), async (req,
 
 app.post('/api/settings/providers/test-digiflazz', authenticate, authorize('owner'), async (req, res) => {
   try {
-    if (!DIGIFLAZZ_USERNAME || !DIGIFLAZZ_API_KEY) {
+    const username = (req.body?.username && !isMaskedOrEmpty(req.body.username))
+      ? String(req.body.username).trim()
+      : DIGIFLAZZ_USERNAME;
+
+    const apiKey = (req.body?.api_key && !isMaskedOrEmpty(req.body.api_key))
+      ? String(req.body.api_key).trim()
+      : DIGIFLAZZ_API_KEY;
+
+    if (!username || !apiKey) {
       return res.status(400).json({
         success: false,
         message: 'Username dan API key Digiflazz belum diatur',
       });
     }
 
-    const sign = crypto.createHash('md5').update(DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + 'depo').digest('hex');
+    const sign = crypto.createHash('md5').update(username + apiKey + 'depo').digest('hex');
     const result = await callDigiflazz('/cek-saldo', {
       cmd: 'deposit',
-      username: DIGIFLAZZ_USERNAME,
+      username,
       sign,
     });
 
-    if (result?.data?.rc === '00') {
+    console.log('Digiflazz /cek-saldo response:', JSON.stringify(result));
+
+    // Dokumentasi Digiflazz: response sukses adalah { "data": { "deposit": 12345 } }
+    // Response sukses TIDAK memiliki field "rc", sehingga memeriksa rc === '00' menyebabkan salah deteksi gagal
+    const isSuccess =
+      result?.data &&
+      (typeof result.data.deposit === 'number' ||
+        (result.data.deposit !== undefined && result.data.deposit !== null) ||
+        result.data.rc === '00');
+
+    if (isSuccess) {
+      const depositVal = Number(result.data.deposit || 0);
       return res.json({
         success: true,
-        message: `Koneksi Digiflazz Berhasil! Saldo Deposit: Rp ${Number(result.data.deposit || 0).toLocaleString('id-ID')}`,
+        message: `Koneksi Digiflazz Berhasil! Saldo Deposit: Rp ${depositVal.toLocaleString('id-ID')}`,
         data: {
-          deposit: Number(result.data.deposit || 0),
-          rc: result.data.rc,
+          deposit: depositVal,
+          rc: result.data.rc || '00',
         },
       });
     }
 
+    const errorMsg =
+      result?.data?.message ||
+      result?.message ||
+      (typeof result?.data === 'string' ? result.data : null) ||
+      'Gagal terhubung ke Digiflazz. Periksa kredensial atau IP Whitelist Anda.';
+
     return res.status(400).json({
       success: false,
-      message: result?.data?.message || result?.message || (typeof result?.data === 'string' ? result.data : null) || 'Gagal terhubung ke Digiflazz. Periksa kredensial Anda.',
+      message: errorMsg,
       data: {
         rc: result?.data?.rc || null,
+        raw: result?.data || null,
       },
     });
   } catch (err) {
@@ -4309,6 +4347,7 @@ app.post('/api/settings/providers/test-digiflazz', authenticate, authorize('owne
     res.status(500).json({ success: false, message: err.message || 'Gagal menghubungi server Digiflazz' });
   }
 });
+
 
 // ─── Health Check ──────────────────────────────────────────────────────────
 
