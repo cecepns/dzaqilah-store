@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, PlusCircle, Store, Save, KeyRound, Package, Megaphone } from 'lucide-react';
+import { User, Mail, Phone, Wallet, Shield, LogOut, ChevronRight, Percent, PlusCircle, Store, Save, KeyRound, Package, Megaphone, Edit3, Server } from 'lucide-react';
 import { get, post, getErrorMessage } from '../utils/request';
 import { API_ENDPOINTS } from '../utils/endpoints';
 import toast from 'react-hot-toast';
@@ -19,11 +19,22 @@ const roleBadgeStyles = {
 };
 
 const Profile = () => {
-  const { user, logout, isAdmin, isReseller, roleLabel, rawRole, updatePartnerName } = useAuth();
+  const { user, logout, isAdmin, isOwner, isReseller, roleLabel, rawRole, updateProfile, updatePartnerName } = useAuth();
   const navigate = useNavigate();
   const [contact, setContact] = useState(null);
   const [partnerName, setPartnerName] = useState(user?.partner_name || '');
   const [savingPartner, setSavingPartner] = useState(false);
+
+  // Profile Edit Modal State
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    phone: '',
+    partner_name: '',
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password Modal State
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -44,6 +55,46 @@ const Profile = () => {
     logout();
     toast.success('Berhasil keluar');
     navigate('/login');
+  };
+
+  const handleOpenEditProfile = () => {
+    setProfileForm({
+      name: user?.name || '',
+      phone: user?.phone || '',
+      partner_name: user?.partner_name || '',
+    });
+    setProfileModalOpen(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!profileForm.name.trim()) {
+      toast.error('Nama lengkap wajib diisi');
+      return;
+    }
+    if (profileForm.name.trim().length < 2) {
+      toast.error('Nama lengkap minimal 2 karakter');
+      return;
+    }
+    if (profileForm.phone && profileForm.phone.trim().length < 9) {
+      toast.error('Nomor HP minimal 9 digit');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      await updateProfile({
+        name: profileForm.name.trim(),
+        phone: profileForm.phone.trim(),
+        partner_name: profileForm.partner_name.trim(),
+      });
+      setPartnerName(profileForm.partner_name.trim());
+      toast.success('Profil akun berhasil diperbarui');
+      setProfileModalOpen(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleSavePartnerName = async () => {
@@ -106,6 +157,9 @@ const Profile = () => {
     ] : [
       { icon: PlusCircle, label: 'Request Topup Saldo', to: '/request-topup' },
     ]),
+    ...(isOwner ? [
+      { icon: Server, label: 'Kelola API Provider (Digiflazz & KMSP)', to: '/admin/api-settings' },
+    ] : []),
     { icon: Wallet, label: 'Riwayat Saldo', to: '/riwayat-saldo' },
     { icon: ChevronRight, label: 'Riwayat Transaksi', to: '/riwayat' },
   ];
@@ -115,7 +169,7 @@ const Profile = () => {
       <Header title="Profil" subtitle="Informasi akun Anda" />
 
       <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-4">
-        <div className="bg-white rounded-2xl border p-4">
+        <div className="bg-white rounded-2xl border p-4 shadow-xs">
           <div className="flex items-center gap-4 mb-4">
             <div className="w-16 h-16 bg-gradient-to-tr from-teal-600 to-cyan-600 rounded-full flex items-center justify-center shadow-md text-white flex-shrink-0">
               <User className="w-8 h-8 text-white" />
@@ -133,18 +187,28 @@ const Profile = () => {
 
           <div className="space-y-3">
             <InfoRow icon={Mail} label="Email" value={user?.email} />
-            <InfoRow icon={Phone} label="No. HP" value={user?.phone} />
+            <InfoRow icon={Phone} label="No. HP" value={user?.phone || '-'} />
             <InfoRow icon={Wallet} label="Saldo" value={formatCurrency(user?.balance)} highlight />
           </div>
 
-          <button
-            type="button"
-            onClick={handleOpenChangePassword}
-            className="mt-4 inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 border border-teal-200 rounded-xl text-sm font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 transition-colors"
-          >
-            <KeyRound className="w-4 h-4" />
-            Ganti Password
-          </button>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <button
+              type="button"
+              onClick={handleOpenEditProfile}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-gray-500" />
+              Edit Akun
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenChangePassword}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 border border-teal-200 rounded-xl text-xs font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 transition-colors"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-teal-600" />
+              Ganti Password
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl border p-4">
@@ -210,6 +274,63 @@ const Profile = () => {
           Keluar
         </button>
       </div>
+
+      <Modal
+        isOpen={profileModalOpen}
+        onClose={() => !savingProfile && setProfileModalOpen(false)}
+        title="Edit Profil Akun"
+      >
+        <div className="space-y-3.5">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Nama Lengkap <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={profileForm.name}
+              onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+              className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="Masukkan nama lengkap"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Nomor HP / WhatsApp
+            </label>
+            <input
+              type="tel"
+              value={profileForm.phone}
+              onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+              className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono"
+              placeholder="Contoh: 081234567890"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
+              Nama Toko / Mitra
+            </label>
+            <input
+              type="text"
+              value={profileForm.partner_name}
+              onChange={(e) => setProfileForm({ ...profileForm, partner_name: e.target.value })}
+              className="w-full px-3 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="Contoh: Toko Jaya Cell"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Nama ini dicetak di struk transaksi & saat dibagikan</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveProfile}
+            disabled={savingProfile}
+            className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60 hover:from-teal-700 hover:to-cyan-700 transition-all shadow-xs"
+          >
+            {savingProfile ? 'Menyimpan...' : 'Simpan Perubahan'}
+          </button>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={passwordModalOpen}

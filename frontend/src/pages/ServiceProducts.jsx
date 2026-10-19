@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ChevronRight, ArrowLeft, Percent, Edit2, Sparkles, Smartphone, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Percent, Edit2, Sparkles, Smartphone, ArrowDownWideNarrow, ArrowUpNarrowWide, Layers } from 'lucide-react';
 import Header from '../components/layout/Header';
 import SearchInput from '../components/ui/SearchInput';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -28,6 +28,8 @@ const ServiceProducts = () => {
   const { user, updateBalance, refreshProfile, isAdmin, isReseller } = useAuth();
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]);
+  const [types, setTypes] = useState([]);
+  const [selectedType, setSelectedType] = useState('');
   const [globalMargin, setGlobalMargin] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -56,6 +58,7 @@ const ServiceProducts = () => {
         limit: pagination.limit,
         search: debouncedSearch,
         brand: selectedBrand,
+        type: selectedType,
         service: service.id,
         sort: sortOrder,
       });
@@ -80,9 +83,23 @@ const ServiceProducts = () => {
 
   useEffect(() => {
     setSelectedBrand('');
+    setSelectedType('');
     setSearch('');
     setPagination((p) => ({ ...p, page: 1 }));
   }, [serviceId]);
+
+  useEffect(() => {
+    setSelectedType('');
+    if (!service.id) {
+      setTypes([]);
+      return;
+    }
+    get(API_ENDPOINTS.PRODUCTS.TYPES, { service: service.id, brand: selectedBrand })
+      .then((res) => {
+        setTypes(res.data || []);
+      })
+      .catch(() => setTypes([]));
+  }, [service.id, selectedBrand]);
 
   useEffect(() => {
     get(API_ENDPOINTS.PRODUCTS.BRANDS, { service: service.id })
@@ -111,6 +128,7 @@ const ServiceProducts = () => {
       const matched = matchBrandFromOperator(op, brands);
       if (matched && matched !== selectedBrand) {
         setSelectedBrand(matched);
+        setSelectedType('');
         setPagination((p) => ({ ...p, page: 1 }));
       }
     }
@@ -118,7 +136,7 @@ const ServiceProducts = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [debouncedSearch, selectedBrand, pagination.page, pagination.limit, service.id, isPasca, sortOrder]);
+  }, [debouncedSearch, selectedBrand, selectedType, pagination.page, pagination.limit, service.id, isPasca, sortOrder]);
 
   const resetModal = () => {
     setSelectedProduct(null);
@@ -334,6 +352,53 @@ const ServiceProducts = () => {
           </div>
         )}
 
+        {types.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-primary-600" />
+                <span>Kategori Paket {selectedBrand ? `(${selectedBrand})` : ''}</span>
+              </span>
+              {selectedType && (
+                <button
+                  type="button"
+                  onClick={() => { setSelectedType(''); setPagination((p) => ({ ...p, page: 1 })); }}
+                  className="text-[11px] font-bold text-primary-600 hover:text-primary-700 hover:underline"
+                >
+                  Reset Kategori
+                </button>
+              )}
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+              <button
+                type="button"
+                onClick={() => { setSelectedType(''); setPagination((p) => ({ ...p, page: 1 })); }}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  !selectedType
+                    ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Semua Kategori
+              </button>
+              {types.map((typeItem) => (
+                <button
+                  key={typeItem}
+                  type="button"
+                  onClick={() => { setSelectedType(typeItem); setPagination((p) => ({ ...p, page: 1 })); }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                    selectedType === typeItem
+                      ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
+                      : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {typeItem}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between px-1 pt-1 text-xs">
           <span className="text-gray-500 font-medium">
             {pagination.total > 0 ? `${pagination.total} produk ditemukan` : 'Daftar Produk'}
@@ -366,7 +431,7 @@ const ServiceProducts = () => {
         ) : products.length === 0 ? (
           <EmptyState title="Produk tidak ditemukan" description="Coba ubah filter atau hubungi admin" />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {products.map((product) => (
               <button
                 key={product.buyer_sku_code}
@@ -377,86 +442,121 @@ const ServiceProducts = () => {
                   }
                   setSelectedProduct(product);
                 }}
-                className={`w-full flex items-center gap-3 bg-white border rounded-xl p-3 hover:shadow-sm transition-shadow text-left ${product.is_buyable === false ? 'opacity-60' : ''
-                  }`}
+                className={`w-full bg-white border border-gray-200/90 rounded-2xl p-3.5 hover:shadow-md hover:border-primary-200 active:scale-[0.99] transition-all text-left flex flex-col justify-between group ${
+                  product.is_buyable === false ? 'opacity-60' : ''
+                }`}
               >
-                {(() => {
-                  const opLogo = getOperatorLogo(product.brand) || getOperatorLogo(product.product_name);
-                  if (opLogo) {
+                <div className="flex items-start gap-3 w-full">
+                  {(() => {
+                    const opLogo = getOperatorLogo(product.brand) || getOperatorLogo(product.product_name);
+                    if (opLogo) {
+                      return (
+                        <div className="w-11 h-11 bg-white border border-gray-100 rounded-xl p-1.5 flex items-center justify-center flex-shrink-0 shadow-xs">
+                          <img
+                            src={opLogo}
+                            alt={product.brand || product.product_name}
+                            className="w-full h-full object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="w-11 h-11 bg-white border border-gray-100 rounded-xl p-1.5 flex items-center justify-center flex-shrink-0 shadow-xs">
-                        <img
-                          src={opLogo}
-                          alt={product.brand || product.product_name}
-                          className="w-full h-full object-contain"
-                          loading="lazy"
-                        />
+                      <div className={`w-11 h-11 ${service.color} rounded-xl flex items-center justify-center flex-shrink-0 shadow-xs`}>
+                        <Icon className="w-5 h-5 text-white" />
                       </div>
                     );
-                  }
-                  return (
-                    <div className={`w-11 h-11 ${service.color} rounded-xl flex items-center justify-center flex-shrink-0 shadow-xs`}>
-                      <Icon className="w-5 h-5 text-white" />
+                  })()}
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 text-sm leading-snug break-words">
+                      {product.product_name}
+                    </h3>
+
+                    <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                      <span className="text-[11px] font-medium text-gray-500">
+                        {product.brand} • {product.category}
+                      </span>
+                      {product.type && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200/60 text-[10px] font-semibold">
+                          {product.type}
+                        </span>
+                      )}
+                      {isAdmin && (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                          product.has_custom_margin
+                            ? 'bg-indigo-100 text-indigo-700'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          <Percent className="w-2.5 h-2.5" />
+                          {product.has_custom_margin
+                            ? `${product.custom_margin_percent}% khusus`
+                            : `${globalMargin}% global`}
+                        </span>
+                      )}
                     </div>
-                  );
-                })()}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 text-sm truncate">{product.product_name}</p>
-                  <p className="text-xs text-gray-500">{product.brand} • {product.category}</p>
-                  {product.desc && isPasca && (
-                    <p className="text-[10px] text-gray-400 mt-0.5 truncate">{product.desc}</p>
-                  )}
-                  {isPasca && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">Biaya admin: {formatCurrency(product.admin)}</p>
-                  )}
-                  {product.is_buyable === false && (
-                    <p className="text-[10px] text-amber-600 font-medium mt-0.5">Belum aktif di akun Digiflazz</p>
-                  )}
-                  {isAdmin && (
-                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 mt-1 rounded-full text-[10px] font-medium ${product.has_custom_margin
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-gray-100 text-gray-500'
-                      }`}>
-                      <Percent className="w-2.5 h-2.5" />
-                      {product.has_custom_margin
-                        ? `${product.custom_margin_percent}% khusus`
-                        : `${globalMargin}% global`}
-                    </span>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0 flex items-center gap-1.5">
-                  {isAdmin && (
-                    <button
-                      type="button"
-                      onClick={(e) => openMarginEdit(e, product)}
-                      className="p-1.5 text-primary-600 hover:bg-primary-50 rounded-lg"
-                      title="Atur margin produk"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  <div>
-                    {isPasca ? (
-                      <p className="text-xs font-medium text-primary-600">Cek Tagihan</p>
-                    ) : (
-                      <>
-                        <p className={`font-bold text-sm ${isReseller ? 'text-emerald-600' : 'text-primary-600'}`}>
-                          {formatCurrency(product.selling_price)}
-                        </p>
-                        {isReseller && product.member_price > product.selling_price && (
-                          <div className="flex items-center justify-end gap-1 mt-0.5">
-                            <span className="text-[10px] line-through text-gray-400">
-                              {formatCurrency(product.member_price)}
-                            </span>
-                            <span className="text-[9px] bg-emerald-100 text-emerald-700 font-semibold px-1 rounded">
-                              Hemat
-                            </span>
-                          </div>
-                        )}
-                      </>
+
+                    {product.desc && product.desc !== '-' && product.desc.toLowerCase() !== product.product_name.toLowerCase() && (
+                      <p className="text-[11px] text-gray-600 mt-2 bg-gray-50/90 rounded-lg p-2 border border-gray-100/90 leading-relaxed whitespace-pre-line break-words">
+                        {product.desc}
+                      </p>
+                    )}
+
+                    {isPasca && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Biaya admin: <span className="font-semibold text-gray-700">{formatCurrency(product.admin)}</span>
+                      </p>
+                    )}
+
+                    {product.is_buyable === false && (
+                      <p className="text-[10px] text-amber-600 font-semibold mt-1">
+                        Belum aktif di akun Digiflazz
+                      </p>
                     )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-300 ml-auto" />
+                </div>
+
+                <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-gray-100 w-full">
+                  <div className="flex items-center gap-1.5">
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => openMarginEdit(e, product)}
+                        className="inline-flex items-center gap-1 px-2 py-1 text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-lg text-[11px] font-semibold transition-colors"
+                        title="Atur margin produk"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                        <span>Atur Margin</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-auto">
+                    <div className="text-right">
+                      {isPasca ? (
+                        <span className="text-xs font-bold text-primary-600">Cek Tagihan</span>
+                      ) : (
+                        <>
+                          <span className={`font-extrabold text-base ${isReseller ? 'text-emerald-600' : 'text-primary-600'}`}>
+                            {formatCurrency(product.selling_price)}
+                          </span>
+                          {isReseller && product.member_price > product.selling_price && (
+                            <div className="flex items-center justify-end gap-1 mt-0.5">
+                              <span className="text-[10px] line-through text-gray-400">
+                                {formatCurrency(product.member_price)}
+                              </span>
+                              <span className="text-[9px] bg-emerald-100 text-emerald-700 font-semibold px-1 rounded">
+                                Hemat
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="w-7 h-7 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
+                      <ChevronRight className="w-4 h-4 stroke-[2.2]" />
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}

@@ -20,6 +20,8 @@ import ProductMargins from './pages/admin/ProductMargins';
 import TopupRequest from './pages/TopupRequest';
 import AdminTopupRequests from './pages/admin/TopupRequests';
 import BannerSettings from './pages/admin/BannerSettings';
+import KmspTools from './pages/KmspTools';
+import ApiSettings from './pages/admin/ApiSettings';
 
 const App = () => (
   <AuthProvider>
@@ -50,6 +52,7 @@ const App = () => (
           <Route path="/riwayat-saldo" element={<BalanceHistory />} />
           <Route path="/request-topup" element={<TopupRequest />} />
           <Route path="/profil" element={<Profile />} />
+          <Route path="/kmsp-tools" element={<KmspTools />} />
           <Route
             path="/admin/users"
             element={
@@ -103,6 +106,14 @@ const App = () => (
             element={
               <ProtectedRoute adminOnly>
                 <BannerSettings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/api-settings"
+            element={
+              <ProtectedRoute ownerOnly>
+                <ApiSettings />
               </ProtectedRoute>
             }
           />

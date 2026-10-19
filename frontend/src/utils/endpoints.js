@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
     PREPAID: '/products/prepaid',
     PASCA: '/products/pasca',
     BRANDS: '/products/brands',
+    TYPES: '/products/types',
     CATEGORIES: '/products/categories',
     SERVICES: '/products/services',
     REFRESH_CACHE: '/products/refresh-cache',
@@ -51,6 +52,8 @@ export const API_ENDPOINTS = {
     CONTACT: '/settings/contact',
     WHATSAPP: '/settings/whatsapp',
     ANNOUNCEMENT: '/settings/announcement',
+    PROVIDERS: '/settings/providers',
+    TEST_DIGIFLAZZ: '/settings/providers/test-digiflazz',
   },
   BANNERS: {
     LIST: '/banners',
@@ -63,5 +66,9 @@ export const API_ENDPOINTS = {
     LIST: '/topup-requests',
     APPROVE: (id) => `/topup-requests/${id}/approve`,
     REJECT: (id) => `/topup-requests/${id}/reject`,
+  },
+  KMSP: {
+    SETTINGS: '/kmsp/settings',
+    EXECUTE: '/kmsp/execute',
   },
 };

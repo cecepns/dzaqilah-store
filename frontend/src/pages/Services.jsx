@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Globe, ExternalLink } from 'lucide-react';
 import Header from '../components/layout/Header';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
@@ -66,6 +66,38 @@ const Services = () => {
                 </div>
               </Link>
             ))}
+
+            {/* External Tool: Cek Paket & Area XL/Axis */}
+            <a
+              href="https://xl-ku.my.id/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-white border border-blue-200/90 rounded-2xl p-3.5 hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98] group flex flex-col justify-between relative overflow-hidden"
+            >
+              <div className="relative z-10">
+                <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mb-2.5 shadow-xs group-hover:scale-105 transition-transform text-white">
+                  <Globe className="w-5 h-5 stroke-[2.2]" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-bold text-gray-900 text-xs tracking-tight group-hover:text-blue-700 transition-colors">
+                    Cek Paket & Area XL/Axis
+                  </h3>
+                  <span className="px-1 py-0.2 rounded bg-amber-400 text-gray-900 text-[8px] font-black uppercase">
+                    Cek
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">
+                  Cek sisa kuota, masa aktif & validasi area XL & AXIS tanpa login.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                  Eksternal
+                </span>
+                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+              </div>
+            </a>
           </div>
         )}
       </div>

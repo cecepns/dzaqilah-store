@@ -83,16 +83,20 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  const updatePartnerName = async (partnerName) => {
-    const res = await put(API_ENDPOINTS.AUTH.UPDATE_PROFILE, { partner_name: partnerName });
+  const updateProfile = async (profileData) => {
+    const res = await put(API_ENDPOINTS.AUTH.UPDATE_PROFILE, profileData);
     setUser(res.data);
     localStorage.setItem('user', JSON.stringify(res.data));
     return res;
   };
 
+  const updatePartnerName = async (partnerName) => {
+    return updateProfile({ partner_name: partnerName });
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, isAdmin, isOwner, isReseller, isMember, roleLabel, roleTitle, rawRole, login, register, logout, refreshProfile, updateBalance, updatePartnerName }}
+      value={{ user, loading, isAdmin, isOwner, isReseller, isMember, roleLabel, roleTitle, rawRole, login, register, logout, refreshProfile, updateBalance, updateProfile, updatePartnerName }}
     >
       {children}
     </AuthContext.Provider>

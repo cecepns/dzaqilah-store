@@ -34,6 +34,9 @@ import {
   ShieldCheck,
   BellOff,
   X,
+  ExternalLink,
+  Radio,
+  KeyRound,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -202,6 +205,8 @@ const Home = () => {
     { to: '/admin/logs', icon: History, label: 'Log Aktivitas', color: 'from-amber-500 to-orange-600' },
     { to: '/admin/margin', icon: Percent, label: 'Pengaturan', color: 'from-blue-500 to-cyan-600' },
     { to: '/admin/product-margins', icon: Percent, label: 'Margin Produk', color: 'from-rose-500 to-pink-600' },
+    { to: '/kmsp-tools', icon: Radio, label: 'KMSP Paket Akrab', color: 'from-cyan-600 to-blue-700' },
+    ...(isOwner ? [{ to: '/admin/api-settings', icon: KeyRound, label: 'Kelola API Provider', color: 'from-violet-600 to-purple-800' }] : []),
   ];
 
   return (
@@ -554,7 +559,85 @@ const Home = () => {
               </Link>
             );
           })}
+
+          {/* Menu Cek XL & Axis in Grid (Semua Role User) */}
+          <a
+            href="https://xl-ku.my.id/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white border border-blue-100 rounded-2xl p-2.5 flex flex-col items-center text-center shadow-xs hover:shadow-md hover:border-blue-300 active:scale-95 transition-all group"
+          >
+            <div className="relative mb-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-blue-100 group-hover:scale-105 transition-transform">
+                <Globe className="w-6 h-6 stroke-[2]" />
+              </div>
+              <span className="absolute -top-1 -right-1 text-[8px] font-black tracking-tight px-1 py-0.2 rounded bg-amber-400 text-gray-900 shadow-xs">
+                CEK
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-800 leading-tight group-hover:text-blue-700 transition-colors line-clamp-1">
+              Cek XL/Axis
+            </span>
+            <span className="text-[9px] text-blue-600 font-medium mt-0.5">
+              Cek Area
+            </span>
+          </a>
+
+          {/* Menu Paket Akrab & Injeksi (KMSP) */}
+          <Link
+            to="/kmsp-tools"
+            className="bg-white border border-teal-100 rounded-2xl p-2.5 flex flex-col items-center text-center shadow-xs hover:shadow-md hover:border-teal-300 active:scale-95 transition-all group"
+          >
+            <div className="relative mb-1.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-700 to-cyan-800 flex items-center justify-center text-white shadow-md shadow-teal-100 group-hover:scale-105 transition-transform">
+                <Radio className="w-6 h-6 stroke-[2]" />
+              </div>
+              <span className="absolute -top-1 -right-1 text-[8px] font-black tracking-tight px-1 py-0.2 rounded bg-teal-500 text-white shadow-xs">
+                AKRAB
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-gray-800 leading-tight group-hover:text-teal-700 transition-colors line-clamp-1">
+              Paket Akrab
+            </span>
+            <span className="text-[9px] text-teal-600 font-medium mt-0.5">
+              Injeksi & AKMT
+            </span>
+          </Link>
         </div>
+
+        {/* ─── Menu Cek Kuota & Area XL / Axis (Semua Role User) ─── */}
+        <a
+          href="https://xl-ku.my.id/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-3.5 text-white shadow-sm hover:shadow-md border border-blue-500/30 active:scale-98 transition-all group relative overflow-hidden"
+        >
+          <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none" />
+          <div className="flex items-center justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                <Globe className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-bold text-xs tracking-wide uppercase text-white">
+                    Cek Paket & Area XL / AXIS
+                  </h3>
+                  <span className="px-1.5 py-0.2 rounded bg-amber-400 text-gray-900 text-[9px] font-black tracking-wider uppercase">
+                    Alat Cek
+                  </span>
+                </div>
+                <p className="text-[11px] text-blue-200 mt-0.5 leading-snug">
+                  Cek sisa kuota, paket aktif, masa aktif & cek area nomor XL & Axis tanpa login.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 group-hover:bg-white/20 text-blue-200 text-xs font-semibold flex-shrink-0 transition-colors">
+              <span>Buka</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </div>
+          </div>
+        </a>
 
         {/* ─── Admin Management Panel (If User is Admin/Owner) ─── */}
         {isAdmin && (
