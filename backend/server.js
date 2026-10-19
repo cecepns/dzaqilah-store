@@ -10,7 +10,7 @@ const fs = require('fs');
 const multer = require('multer');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'raca_cell_secret';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -33,13 +33,22 @@ const DEFAULT_RESELLER_MARGIN_PERCENT = parseFloat(process.env.RESELLER_MARKUP_P
 let marginPercent = DEFAULT_MARGIN_PERCENT;
 let resellerMarginPercent = DEFAULT_RESELLER_MARGIN_PERCENT;
 let productMargins = new Map();
-const DIGIFLAZZ_USERNAME = process.env.DIGIFLAZZ_USERNAME || 'tovowaWjYdvD';
-const DIGIFLAZZ_API_KEY = process.env.DIGIFLAZZ_API_KEY || '86a9458b-3f32-58f1-85e5-eaf901bfb7ed';
-const DIGIFLAZZ_TESTING = process.env.DIGIFLAZZ_TESTING === 'true';
+let DIGIFLAZZ_USERNAME = process.env.DIGIFLAZZ_USERNAME || 'tovowaWjYdvD';
+let DIGIFLAZZ_API_KEY = process.env.DIGIFLAZZ_API_KEY || '86a9458b-3f32-58f1-85e5-eaf901bfb7ed';
+let DIGIFLAZZ_TESTING = process.env.DIGIFLAZZ_TESTING === 'true';
+let DIGIFLAZZ_WEBHOOK_SECRET = process.env.DIGIFLAZZ_WEBHOOK_SECRET || 'dzaqilahstore2026';
 const DIGIFLAZZ_BASE_URL = 'https://api.digiflazz.com/v1';
 const PRICE_LIST_CACHE_TTL = (parseInt(process.env.PRICE_LIST_CACHE_TTL, 10) || 600) * 1000;
 
-let pool;
+let pool = mysql.createPool({
+  host: "localhost",
+  user: "dzaqila1_cell",
+  password: "dzaqila1_cell",
+  database: "dzaqila1_cell",
+  waitForConnections: true,
+  connectionLimit: 10,
+});;
+
 let priceListCache = { data: null, fetchedAt: 0 };
 let pascaPriceListCache = { data: null, fetchedAt: 0 };
 
@@ -198,6 +207,50 @@ const loadProductMargins = async () => {
     productMargins = new Map();
   }
   return productMargins;
+};
+
+const loadDigiflazzConfig = async () => {
+  try {
+    const u = await getSetting('digiflazz_username', process.env.DIGIFLAZZ_USERNAME || 'tovowaWjYdvD');
+    const k = await getSetting('digiflazz_api_key', process.env.DIGIFLAZZ_API_KEY || '86a9458b-3f32-58f1-85e5-eaf901bfb7ed');
+    const t = await getSetting('digiflazz_testing', process.env.DIGIFLAZZ_TESTING || 'true');
+    const w = await getSetting('digiflazz_webhook_secret', process.env.DIGIFLAZZ_WEBHOOK_SECRET || 'dzaqilahstore2026');
+    DIGIFLAZZ_USERNAME = u;
+    DIGIFLAZZ_API_KEY = k;
+    DIGIFLAZZ_TESTING = t === 'true';
+    DIGIFLAZZ_WEBHOOK_SECRET = w;
+  } catch (err) {
+    console.error('Failed to load Digiflazz config from settings:', err.message);
+  }
+};
+
+const maskSecretKey = (secret) => {
+  if (!secret || typeof secret !== 'string') return null;
+  const str = secret.trim();
+  if (!str) return null;
+  if (str.length <= 8) return '••••••••';
+  return `${str.slice(0, 4)}••••••••${str.slice(-4)}`;
+};
+
+const isMaskedOrEmpty = (val) => {
+  if (val === undefined || val === null) return true;
+  const str = String(val).trim();
+  return str === '' || str.includes('••••') || str.includes('****');
+};
+
+const sanitizeSensitiveObject = (obj) => {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeSensitiveObject);
+  const copy = { ...obj };
+  const sensitiveKeys = ['api_key', 'apikey', 'secret', 'sign', 'password', 'token', 'authorization'];
+  for (const key of Object.keys(copy)) {
+    if (sensitiveKeys.includes(key.toLowerCase())) {
+      delete copy[key];
+    } else if (typeof copy[key] === 'object') {
+      copy[key] = sanitizeSensitiveObject(copy[key]);
+    }
+  }
+  return copy;
 };
 
 const fetchProductMarginsMap = () => loadProductMargins();
@@ -633,6 +686,7 @@ const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
+
 // ─── Database Init ─────────────────────────────────────────────────────────
 
 const initDatabase = async () => {
@@ -716,12 +770,16 @@ const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
         setting_key VARCHAR(100) NOT NULL UNIQUE,
-        setting_value VARCHAR(255) NOT NULL,
+        setting_value TEXT NOT NULL,
         updated_by INT,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
       )
     `);
+
+    try {
+      await connection.query('ALTER TABLE settings MODIFY COLUMN setting_value TEXT NOT NULL');
+    } catch (_) {}
 
     const [marginSetting] = await connection.query(
       "SELECT id FROM settings WHERE setting_key = 'margin_percent' LIMIT 1"
@@ -882,7 +940,7 @@ const initDatabase = async () => {
 
     try {
       await connection.query('ALTER TABLE settings MODIFY COLUMN setting_value TEXT NOT NULL');
-    } catch (_) {}
+    } catch (_) { }
 
     const [announcementSetting] = await connection.query(
       "SELECT id FROM settings WHERE setting_key = 'announcement_text' LIMIT 1"
@@ -902,6 +960,44 @@ const initDatabase = async () => {
       );
     }
 
+    const kmspDefaults = [
+      { key: 'kmsp_api_key', val: process.env.KMSP_API_KEY || 'fe5df3e7-e7a8-4e63-8006-374b530024cb' },
+      { key: 'kmsp_base_url', val: process.env.KMSP_BASE_URL || 'https://my.kmsp-store.com' },
+      { key: 'kmsp_enable_member', val: 'false' },
+      { key: 'kmsp_enable_reseller', val: 'false' },
+    ];
+    for (const item of kmspDefaults) {
+      const [existing] = await connection.query(
+        'SELECT id FROM settings WHERE setting_key = ? LIMIT 1',
+        [item.key]
+      );
+      if (!existing.length) {
+        await connection.query(
+          'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)',
+          [item.key, item.val]
+        );
+      }
+    }
+
+    const digiflazzDefaults = [
+      { key: 'digiflazz_username', val: process.env.DIGIFLAZZ_USERNAME || 'tovowaWjYdvD' },
+      { key: 'digiflazz_api_key', val: process.env.DIGIFLAZZ_API_KEY || '86a9458b-3f32-58f1-85e5-eaf901bfb7ed' },
+      { key: 'digiflazz_testing', val: process.env.DIGIFLAZZ_TESTING || 'true' },
+      { key: 'digiflazz_webhook_secret', val: process.env.DIGIFLAZZ_WEBHOOK_SECRET || 'dzaqilahstore2026' },
+    ];
+    for (const item of digiflazzDefaults) {
+      const [existing] = await connection.query(
+        'SELECT id FROM settings WHERE setting_key = ? LIMIT 1',
+        [item.key]
+      );
+      if (!existing.length) {
+        await connection.query(
+          'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?)',
+          [item.key, item.val]
+        );
+      }
+    }
+
     const [owners] = await connection.query("SELECT id FROM users WHERE role = 'owner' LIMIT 1");
     if (!owners.length) {
       const hashed = await bcrypt.hash('password123', 10);
@@ -917,6 +1013,7 @@ const initDatabase = async () => {
 
   await loadMarginPercent();
   await loadProductMargins();
+  await loadDigiflazzConfig();
 };
 
 // ─── Auth Routes ───────────────────────────────────────────────────────────
@@ -996,18 +1093,66 @@ app.get('/api/auth/profile', authenticate, async (req, res) => {
 
 app.put('/api/auth/profile', authenticate, async (req, res) => {
   try {
-    const partnerName = req.body.partner_name?.trim() ?? '';
+    const { name, phone, partner_name } = req.body;
 
-    if (partnerName.length > 100) {
-      return res.status(400).json({ success: false, message: 'Nama mitra maksimal 100 karakter' });
+    const updates = [];
+    const params = [];
+
+    if (name !== undefined) {
+      const trimmedName = String(name || '').trim();
+      if (!trimmedName || trimmedName.length < 2) {
+        return res.status(400).json({ success: false, message: 'Nama lengkap minimal 2 karakter' });
+      }
+      if (trimmedName.length > 100) {
+        return res.status(400).json({ success: false, message: 'Nama lengkap maksimal 100 karakter' });
+      }
+      updates.push('name = ?');
+      params.push(trimmedName);
     }
 
-    const value = partnerName || null;
-    await pool.execute('UPDATE users SET partner_name = ? WHERE id = ?', [value, req.user.id]);
+    if (phone !== undefined) {
+      const trimmedPhone = String(phone || '').trim();
+      if (trimmedPhone) {
+        if (trimmedPhone.length < 9 || trimmedPhone.length > 20) {
+          return res.status(400).json({ success: false, message: 'Nomor HP tidak valid (9-20 karakter)' });
+        }
+        const [existingPhone] = await pool.execute(
+          'SELECT id FROM users WHERE phone = ? AND id != ? LIMIT 1',
+          [trimmedPhone, req.user.id]
+        );
+        if (existingPhone.length) {
+          return res.status(400).json({ success: false, message: 'Nomor HP sudah digunakan akun lain' });
+        }
+      }
+      updates.push('phone = ?');
+      params.push(trimmedPhone || null);
+    }
+
+    if (partner_name !== undefined) {
+      const trimmedPartner = String(partner_name || '').trim();
+      if (trimmedPartner.length > 100) {
+        return res.status(400).json({ success: false, message: 'Nama mitra maksimal 100 karakter' });
+      }
+      updates.push('partner_name = ?');
+      params.push(trimmedPartner || null);
+    }
+
+    if (updates.length > 0) {
+      params.push(req.user.id);
+      await pool.execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
 
     const [rows] = await pool.execute(
       'SELECT id, name, email, phone, partner_name, role, balance, status FROM users WHERE id = ?',
       [req.user.id]
+    );
+
+    await logActivity(
+      req.user.id,
+      'update_profile',
+      `Pengguna memperbarui profil akun (${rows[0].name})`,
+      { name: rows[0].name, phone: rows[0].phone, partner_name: rows[0].partner_name },
+      req.ip
     );
 
     res.json({
@@ -1016,8 +1161,49 @@ app.put('/api/auth/profile', authenticate, async (req, res) => {
       data: rows[0],
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: 'Terjadi kesalahan server' });
+    console.error('Update profile error:', err);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan server saat memperbarui profil' });
+  }
+});
+
+app.post('/api/auth/change-password', authenticate, async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({ success: false, message: 'Password saat ini dan password baru wajib diisi' });
+    }
+
+    if (String(new_password).length < 6) {
+      return res.status(400).json({ success: false, message: 'Password baru minimal 6 karakter' });
+    }
+
+    const [rows] = await pool.execute('SELECT password FROM users WHERE id = ?', [req.user.id]);
+    if (!rows.length) {
+      return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan' });
+    }
+
+    const user = rows[0];
+    const isMatch = await bcrypt.compare(current_password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: 'Password saat ini tidak sesuai' });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(new_password), 10);
+    await pool.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+
+    await logActivity(
+      req.user.id,
+      'change_password',
+      'Pengguna berhasil mengganti password akun',
+      null,
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Password berhasil diubah' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ success: false, message: 'Terjadi kesalahan server saat mengganti password' });
   }
 });
 
@@ -1118,13 +1304,13 @@ app.put('/api/users/:id', authenticate, authorize('owner', 'admin'), async (req,
     if (phone) { updates.push('phone = ?'); params.push(phone.trim()); }
     if (status) { updates.push('status = ?'); params.push(status); }
     if (role) {
-      if (role === 'owner') {
+      if (role === 'owner' && existing[0].role !== 'owner') {
         return res.status(403).json({ success: false, message: 'Tidak bisa mengubah menjadi role owner' });
       }
       if (role === 'admin' && req.user.role !== 'owner') {
         return res.status(403).json({ success: false, message: 'Hanya owner yang bisa mengubah user menjadi admin' });
       }
-      if (!['user', 'reseller', 'admin'].includes(role)) {
+      if (!['user', 'reseller', 'admin', 'owner'].includes(role)) {
         return res.status(400).json({ success: false, message: 'Role tidak valid' });
       }
       updates.push('role = ?');
@@ -1350,9 +1536,9 @@ app.get('/api/products/prepaid', authenticate, async (req, res) => {
 
     let raw = products;
     if (service) raw = raw.filter((p) => matchPrepaidService(p, service));
-    if (brand) raw = raw.filter((p) => p.brand === brand);
-    if (category) raw = raw.filter((p) => p.category === category);
-    if (type) raw = raw.filter((p) => p.type === type);
+    if (brand) raw = raw.filter((p) => (p.brand || '').toLowerCase() === brand.toLowerCase());
+    if (category) raw = raw.filter((p) => (p.category || '').toLowerCase() === category.toLowerCase());
+    if (type) raw = raw.filter((p) => (p.type || '').toLowerCase() === type.toLowerCase());
 
     const marginsMap = await fetchProductMarginsMap();
     let data = mapPrepaidProducts(raw, marginsMap, req.user.role);
@@ -1505,6 +1691,32 @@ app.get('/api/products/brands', authenticate, async (req, res) => {
   }
 });
 
+app.get('/api/products/types', authenticate, async (req, res) => {
+  try {
+    const service = req.query.service?.trim().toLowerCase() || '';
+    const brand = req.query.brand?.trim() || '';
+    const isPasca = PASCA_SERVICE_IDS.includes(service);
+
+    let products = isPasca ? await getDigiflazzPascaPriceList() : await getDigiflazzPriceList();
+    if (service) {
+      products = products.filter((p) =>
+        isPasca ? matchPascaService(p, service) : matchPrepaidService(p, service)
+      );
+    }
+    if (brand) {
+      products = products.filter((p) => (p.brand || '').toLowerCase() === brand.toLowerCase());
+    }
+
+    const marginsMap = await fetchProductMarginsMap();
+    const mapper = isPasca ? mapPascaProducts : mapPrepaidProducts;
+    const types = [...new Set(mapper(products, marginsMap).map((p) => p.type).filter(Boolean))].sort();
+    res.json({ success: true, data: types });
+  } catch (err) {
+    console.error('Digiflazz types error:', err.message);
+    res.status(502).json({ success: false, message: err.message || 'Gagal mengambil daftar kategori/tipe paket' });
+  }
+});
+
 const OPERATOR_PREFIX_MAP = [
   { brand: 'TELKOMSEL', name: 'Telkomsel', prefixes: ['0811', '0812', '0813', '0821', '0822', '0823', '0851', '0852', '0853'] },
   { brand: 'INDOSAT', name: 'Indosat Ooredoo', prefixes: ['0814', '0815', '0816', '0855', '0856', '0857', '0858'] },
@@ -1531,11 +1743,11 @@ app.get('/api/products/detect-operator', authenticate, (req, res) => {
     success: true,
     data: match
       ? {
-          brand: match.brand,
-          name: match.name,
-          prefix: prefix4,
-          phone,
-        }
+        brand: match.brand,
+        name: match.name,
+        prefix: prefix4,
+        phone,
+      }
       : null,
   });
 });
@@ -2829,7 +3041,7 @@ app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), uploadBan
       if (current.image_url && current.image_url.startsWith('/uploads/banners/')) {
         const oldPath = path.join(uploadsRootDir, current.image_url.replace('/uploads/', ''));
         if (fs.existsSync(oldPath)) {
-          try { fs.unlinkSync(oldPath); } catch (_) {}
+          try { fs.unlinkSync(oldPath); } catch (_) { }
         }
       }
     } else if (req.body.image_url) {
@@ -2879,7 +3091,7 @@ app.delete('/api/banners/:id', authenticate, authorize('owner', 'admin'), async 
     if (current.image_url && current.image_url.startsWith('/uploads/banners/')) {
       const oldPath = path.join(uploadsRootDir, current.image_url.replace('/uploads/', ''));
       if (fs.existsSync(oldPath)) {
-        try { fs.unlinkSync(oldPath); } catch (_) {}
+        try { fs.unlinkSync(oldPath); } catch (_) { }
       }
     }
 
@@ -2982,6 +3194,391 @@ app.put('/api/settings/announcement', authenticate, authorize('owner', 'admin'),
   }
 });
 
+// ─── KMSP Store Integration & Management (AKMT & Tembak Paket) ──────────────
+
+const KMSP_DEFAULT_API_KEY = process.env.KMSP_API_KEY || 'fe5df3e7-e7a8-4e63-8006-374b530024cb';
+const KMSP_DEFAULT_BASE_URL = process.env.KMSP_BASE_URL || 'https://my.kmsp-store.com';
+
+const getKmspConfig = async () => {
+  const apiKey = await getSetting('kmsp_api_key', KMSP_DEFAULT_API_KEY);
+  const baseUrl = await getSetting('kmsp_base_url', KMSP_DEFAULT_BASE_URL);
+  const enableMemberStr = await getSetting('kmsp_enable_member', 'false');
+  const enableResellerStr = await getSetting('kmsp_enable_reseller', 'false');
+
+  return {
+    apiKey: apiKey || KMSP_DEFAULT_API_KEY,
+    baseUrl: baseUrl || KMSP_DEFAULT_BASE_URL,
+    enableMember: enableMemberStr === 'true',
+    enableReseller: enableResellerStr === 'true',
+  };
+};
+
+const canUserAccessKmspAdmin = (role, config) => {
+  if (role === 'owner' || role === 'admin') return true;
+  if (role === 'reseller') return config.enableReseller;
+  if (role === 'user') return config.enableMember;
+  return false;
+};
+
+const callKmspEndpoint = async (action, queryParams = {}, payload = null) => {
+  const config = await getKmspConfig();
+  const baseUrl = config.baseUrl.replace(/\/+$/, '');
+
+  const params = new URLSearchParams();
+  params.set('api_key', config.apiKey);
+  params.set('action', action);
+  for (const [k, v] of Object.entries(queryParams || {})) {
+    if (v !== undefined && v !== null && v !== '') {
+      params.set(k, String(v));
+    }
+  }
+
+  const candidateUrls = [
+    `${baseUrl}/v1?${params.toString()}`,
+    `${baseUrl}/api/v1?${params.toString()}`,
+    `${baseUrl}/webapis/v1?${params.toString()}`,
+  ];
+
+  const headers = {
+    'Accept': 'application/json',
+    'x-api-key': config.apiKey,
+    'Authorization': `Bearer ${config.apiKey}`,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DzaqilahCell/1.0',
+  };
+
+  let lastError = null;
+  for (const url of candidateUrls) {
+    try {
+      const isPost = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
+      const opts = {
+        method: isPost ? 'POST' : 'GET',
+        headers: { ...headers },
+      };
+      if (isPost) {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(payload);
+      }
+
+      const resp = await fetch(url, opts);
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        const json = await resp.json();
+        return { ok: resp.ok, status: resp.status, data: json };
+      } else {
+        const text = await resp.text();
+        if (resp.ok && text.trim().startsWith('{')) {
+          try {
+            return { ok: true, status: resp.status, data: JSON.parse(text) };
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  return {
+    ok: false,
+    status: 502,
+    message: lastError ? lastError.message : 'KMSP Store API tidak merespons atau sedang dalam pemeliharaan.',
+  };
+};
+
+app.get('/api/kmsp/settings', authenticate, async (req, res) => {
+  try {
+    const config = await getKmspConfig();
+    const isOwnerOrAdmin = req.user.role === 'owner' || req.user.role === 'admin';
+    const canAccessAdmin = canUserAccessKmspAdmin(req.user.role, config);
+
+    res.json({
+      success: true,
+      data: {
+        can_access_admin_tools: canAccessAdmin,
+        enable_member: config.enableMember,
+        enable_reseller: config.enableReseller,
+        ...(isOwnerOrAdmin
+          ? {
+            has_api_key: Boolean(config.apiKey),
+            api_key_masked: maskSecretKey(config.apiKey),
+            base_url: config.baseUrl,
+          }
+          : {}),
+      },
+    });
+  } catch (err) {
+    console.error('Get KMSP settings error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengambil pengaturan KMSP' });
+  }
+});
+
+app.put('/api/kmsp/settings', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  try {
+    const { api_key, enable_member, enable_reseller, base_url } = req.body;
+
+    if (api_key !== undefined && !isMaskedOrEmpty(api_key)) {
+      await setSetting('kmsp_api_key', String(api_key).trim(), req.user.id);
+    }
+    if (base_url !== undefined) {
+      await setSetting('kmsp_base_url', String(base_url).trim(), req.user.id);
+    }
+    if (enable_member !== undefined) {
+      const val = enable_member === true || enable_member === 'true' || enable_member === 1 ? 'true' : 'false';
+      await setSetting('kmsp_enable_member', val, req.user.id);
+    }
+    if (enable_reseller !== undefined) {
+      const val = enable_reseller === true || enable_reseller === 'true' || enable_reseller === 1 ? 'true' : 'false';
+      await setSetting('kmsp_enable_reseller', val, req.user.id);
+    }
+
+    const updated = await getKmspConfig();
+
+    await logActivity(
+      req.user.id,
+      'update_kmsp_settings',
+      `Mengubah pengaturan KMSP (Member: ${updated.enableMember}, Reseller: ${updated.enableReseller})`,
+      { enable_member: updated.enableMember, enable_reseller: updated.enableReseller },
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: 'Pengaturan KMSP berhasil diperbarui',
+      data: {
+        has_api_key: Boolean(updated.apiKey),
+        api_key_masked: maskSecretKey(updated.apiKey),
+        base_url: updated.baseUrl,
+        enable_member: updated.enableMember,
+        enable_reseller: updated.enableReseller,
+        can_access_admin_tools: true,
+      },
+    });
+  } catch (err) {
+    console.error('Update KMSP settings error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal menyimpan pengaturan KMSP' });
+  }
+});
+
+app.post('/api/kmsp/execute', authenticate, async (req, res) => {
+  try {
+    const { category, action, params = {}, payload = null } = req.body;
+
+    if (!action) {
+      return res.status(400).json({ success: false, message: 'Aksi KMSP tidak valid' });
+    }
+
+    const config = await getKmspConfig();
+    const isRestrictedCategory = category === 'akmt' || category === 'tembak_paket';
+
+    if (isRestrictedCategory && !canUserAccessKmspAdmin(req.user.role, config)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Akses ditolak: Menu ini hanya dapat diakses oleh Admin & Owner, atau belum diaktifkan untuk role Anda.',
+      });
+    }
+
+    // Call KMSP endpoint
+    const kmspResult = await callKmspEndpoint(action, params, payload);
+
+    // Activity log
+    await logActivity(
+      req.user.id,
+      `kmsp_${action}`,
+      `Menjalankan fitur KMSP: ${action} (${category || 'general'})`,
+      { params, result_status: kmspResult.status },
+      req.ip
+    );
+
+    if (kmspResult.ok && kmspResult.data) {
+      return res.json({
+        success: true,
+        message: kmspResult.data.message || 'Permintaan berhasil diproses oleh KMSP',
+        data: sanitizeSensitiveObject(kmspResult.data.data ?? kmspResult.data),
+      });
+    }
+
+    res.status(kmspResult.status >= 400 && kmspResult.status < 600 ? kmspResult.status : 200).json({
+      success: kmspResult.ok,
+      message: kmspResult.data?.message || kmspResult.message || `Respon KMSP (status ${kmspResult.status})`,
+      data: sanitizeSensitiveObject(kmspResult.data) || null,
+    });
+  } catch (err) {
+    console.error('KMSP execute error:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Terjadi kesalahan sistem KMSP' });
+  }
+});
+
+// ─── Provider Management (Digiflazz & KMSP API Keys) ──────────────────────
+
+app.get('/api/settings/providers', authenticate, authorize('owner'), async (req, res) => {
+  try {
+    const kmspConfig = await getKmspConfig();
+
+    res.json({
+      success: true,
+      data: {
+        digiflazz: {
+          username: DIGIFLAZZ_USERNAME,
+          has_api_key: Boolean(DIGIFLAZZ_API_KEY),
+          api_key_masked: maskSecretKey(DIGIFLAZZ_API_KEY),
+          testing: DIGIFLAZZ_TESTING,
+          has_webhook_secret: Boolean(DIGIFLAZZ_WEBHOOK_SECRET),
+          webhook_secret_masked: maskSecretKey(DIGIFLAZZ_WEBHOOK_SECRET),
+          base_url: DIGIFLAZZ_BASE_URL,
+        },
+        kmsp: {
+          has_api_key: Boolean(kmspConfig.apiKey),
+          api_key_masked: maskSecretKey(kmspConfig.apiKey),
+          base_url: kmspConfig.baseUrl,
+          enable_member: kmspConfig.enableMember,
+          enable_reseller: kmspConfig.enableReseller,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Get provider settings error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengambil pengaturan provider API' });
+  }
+});
+
+app.put('/api/settings/providers', authenticate, authorize('owner'), async (req, res) => {
+  try {
+    const {
+      digiflazz_username,
+      digiflazz_api_key,
+      digiflazz_testing,
+      digiflazz_webhook_secret,
+      kmsp_api_key,
+      kmsp_base_url,
+      kmsp_enable_member,
+      kmsp_enable_reseller,
+    } = req.body;
+
+    let digiflazzChanged = false;
+
+    if (digiflazz_username !== undefined) {
+      await setSetting('digiflazz_username', String(digiflazz_username).trim(), req.user.id);
+      digiflazzChanged = true;
+    }
+    if (digiflazz_api_key !== undefined && !isMaskedOrEmpty(digiflazz_api_key)) {
+      await setSetting('digiflazz_api_key', String(digiflazz_api_key).trim(), req.user.id);
+      digiflazzChanged = true;
+    }
+    if (digiflazz_testing !== undefined) {
+      const val = digiflazz_testing === true || digiflazz_testing === 'true' || digiflazz_testing === 1 ? 'true' : 'false';
+      await setSetting('digiflazz_testing', val, req.user.id);
+      digiflazzChanged = true;
+    }
+    if (digiflazz_webhook_secret !== undefined && !isMaskedOrEmpty(digiflazz_webhook_secret)) {
+      await setSetting('digiflazz_webhook_secret', String(digiflazz_webhook_secret).trim(), req.user.id);
+      digiflazzChanged = true;
+    }
+
+    if (kmsp_api_key !== undefined && !isMaskedOrEmpty(kmsp_api_key)) {
+      await setSetting('kmsp_api_key', String(kmsp_api_key).trim(), req.user.id);
+    }
+    if (kmsp_base_url !== undefined) {
+      await setSetting('kmsp_base_url', String(kmsp_base_url).trim(), req.user.id);
+    }
+    if (kmsp_enable_member !== undefined) {
+      const val = kmsp_enable_member === true || kmsp_enable_member === 'true' || kmsp_enable_member === 1 ? 'true' : 'false';
+      await setSetting('kmsp_enable_member', val, req.user.id);
+    }
+    if (kmsp_enable_reseller !== undefined) {
+      const val = kmsp_enable_reseller === true || kmsp_enable_reseller === 'true' || kmsp_enable_reseller === 1 ? 'true' : 'false';
+      await setSetting('kmsp_enable_reseller', val, req.user.id);
+    }
+
+    if (digiflazzChanged) {
+      await loadDigiflazzConfig();
+      priceListCache = { data: null, fetchedAt: 0 };
+      pascaPriceListCache = { data: null, fetchedAt: 0 };
+    }
+
+    const kmspConfig = await getKmspConfig();
+
+    await logActivity(
+      req.user.id,
+      'update_providers',
+      'Owner memperbarui konfigurasi API Provider (Digiflazz / KMSP)',
+      {
+        digiflazz_username: DIGIFLAZZ_USERNAME,
+        digiflazz_testing: DIGIFLAZZ_TESTING,
+        kmsp_enable_member: kmspConfig.enableMember,
+        kmsp_enable_reseller: kmspConfig.enableReseller,
+      },
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: 'Pengaturan API Provider berhasil disimpan',
+      data: {
+        digiflazz: {
+          username: DIGIFLAZZ_USERNAME,
+          has_api_key: Boolean(DIGIFLAZZ_API_KEY),
+          api_key_masked: maskSecretKey(DIGIFLAZZ_API_KEY),
+          testing: DIGIFLAZZ_TESTING,
+          has_webhook_secret: Boolean(DIGIFLAZZ_WEBHOOK_SECRET),
+          webhook_secret_masked: maskSecretKey(DIGIFLAZZ_WEBHOOK_SECRET),
+          base_url: DIGIFLAZZ_BASE_URL,
+        },
+        kmsp: {
+          has_api_key: Boolean(kmspConfig.apiKey),
+          api_key_masked: maskSecretKey(kmspConfig.apiKey),
+          base_url: kmspConfig.baseUrl,
+          enable_member: kmspConfig.enableMember,
+          enable_reseller: kmspConfig.enableReseller,
+        },
+      },
+    });
+  } catch (err) {
+    console.error('Update provider settings error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal memperbarui pengaturan provider API' });
+  }
+});
+
+app.post('/api/settings/providers/test-digiflazz', authenticate, authorize('owner'), async (req, res) => {
+  try {
+    if (!DIGIFLAZZ_USERNAME || !DIGIFLAZZ_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username dan API key Digiflazz belum diatur',
+      });
+    }
+
+    const sign = crypto.createHash('md5').update(DIGIFLAZZ_USERNAME + DIGIFLAZZ_API_KEY + 'depo').digest('hex');
+    const result = await callDigiflazz('/cek-saldo', {
+      cmd: 'deposit',
+      username: DIGIFLAZZ_USERNAME,
+      sign,
+    });
+
+    if (result?.data?.rc === '00') {
+      return res.json({
+        success: true,
+        message: `Koneksi Digiflazz Berhasil! Saldo Deposit: Rp ${Number(result.data.deposit || 0).toLocaleString('id-ID')}`,
+        data: {
+          deposit: Number(result.data.deposit || 0),
+          rc: result.data.rc,
+        },
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: result?.data?.message || result?.message || (typeof result?.data === 'string' ? result.data : null) || 'Gagal terhubung ke Digiflazz. Periksa kredensial Anda.',
+      data: {
+        rc: result?.data?.rc || null,
+      },
+    });
+  } catch (err) {
+    console.error('Test Digiflazz connection error:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Gagal menghubungi server Digiflazz' });
+  }
+});
+
 // ─── Health Check ──────────────────────────────────────────────────────────
 
 app.get('/api/health', (_, res) => {
@@ -2989,14 +3586,17 @@ app.get('/api/health', (_, res) => {
 });
 
 // ─── Start Server ──────────────────────────────────────────────────────────
+app.listen(PORT, () => {
+  console.log(`Dzaqilah Store API running on port ${PORT}`);
+});
 
-initDatabase()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Dzaqilah Store API running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Database initialization failed:', err.message);
-    process.exit(1);
-  });
+// initDatabase()
+//   .then(() => {
+//     app.listen(PORT, () => {
+//       console.log(`Dzaqilah Store API running on port ${PORT}`);
+//     });
+//   })
+//   .catch((err) => {
+//     console.error('Database initialization failed:', err.message);
+//     process.exit(1);
+//   });

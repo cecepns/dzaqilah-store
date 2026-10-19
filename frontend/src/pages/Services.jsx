@@ -78,12 +78,12 @@ const Services = () => {
                 <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center mb-2.5 shadow-xs group-hover:scale-105 transition-transform text-white">
                   <Globe className="w-5 h-5 stroke-[2.2]" />
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <h3 className="font-bold text-gray-900 text-xs tracking-tight group-hover:text-blue-700 transition-colors">
                     Cek Paket & Area XL/Axis
                   </h3>
-                  <span className="px-1 py-0.2 rounded bg-amber-400 text-gray-900 text-[8px] font-black uppercase">
-                    Cek
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[8px] font-black uppercase whitespace-nowrap shadow-xs">
+                    Alat Cek
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">

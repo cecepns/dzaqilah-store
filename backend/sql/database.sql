@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 CREATE TABLE IF NOT EXISTS settings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   setting_key VARCHAR(100) NOT NULL UNIQUE,
-  setting_value VARCHAR(255) NOT NULL,
+  setting_value TEXT NOT NULL,
   updated_by INT,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
@@ -101,6 +101,30 @@ INSERT INTO settings (setting_key, setting_value) VALUES ('margin_reseller_perce
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 INSERT INTO settings (setting_key, setting_value) VALUES ('admin_whatsapp', '')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('digiflazz_username', 'tovowaWjYdvD')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('digiflazz_api_key', '86a9458b-3f32-58f1-85e5-eaf901bfb7ed')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('digiflazz_testing', 'true')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('digiflazz_webhook_secret', 'dzaqilahstore2026')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_api_key', 'fe5df3e7-e7a8-4e63-8006-374b530024cb')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_base_url', 'https://my.kmsp-store.com')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_enable_member', 'false')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
+INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_enable_reseller', 'false')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 -- ─── 006: Product Margins (Per-Item Override) ─────────────────────────────

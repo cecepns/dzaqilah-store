@@ -605,36 +605,41 @@ const Home = () => {
           </Link>
         </div>
 
-        {/* ─── Menu Cek Kuota & Area XL / Axis (Semua Role User) ─── */}
+        {/* ─── Banner Tool Cek Paket & Area XL / Axis (Semua Role User) ─── */}
         <a
           href="https://xl-ku.my.id/"
           target="_blank"
           rel="noopener noreferrer"
-          className="block bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-3.5 text-white shadow-sm hover:shadow-md border border-blue-500/30 active:scale-98 transition-all group relative overflow-hidden"
+          className="block bg-gradient-to-r from-blue-950 via-indigo-900 to-slate-900 rounded-2xl p-3.5 sm:p-4 text-white shadow-sm hover:shadow-md border border-blue-500/30 active:scale-[0.99] transition-all group relative overflow-hidden"
         >
-          <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-500/20 rounded-full blur-xl pointer-events-none" />
-          <div className="flex items-center justify-between gap-3 relative z-10">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                <Globe className="w-6 h-6 stroke-[2.2]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-xs tracking-wide uppercase text-white">
-                    Cek Paket & Area XL / AXIS
-                  </h3>
-                  <span className="px-1.5 py-0.2 rounded bg-amber-400 text-gray-900 text-[9px] font-black tracking-wider uppercase">
-                    Alat Cek
-                  </span>
-                </div>
-                <p className="text-[11px] text-blue-200 mt-0.5 leading-snug">
-                  Cek sisa kuota, paket aktif, masa aktif & cek area nomor XL & Axis tanpa login.
-                </p>
-              </div>
+          <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-blue-500/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute right-12 top-0 w-20 h-20 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+
+          <div className="flex items-center gap-3 relative z-10">
+            {/* Icon */}
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-md flex-shrink-0 group-hover:scale-105 transition-transform border border-white/10">
+              <Globe className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
             </div>
-            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 group-hover:bg-white/20 text-blue-200 text-xs font-semibold flex-shrink-0 transition-colors">
+
+            {/* Information */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-bold text-xs sm:text-sm text-white leading-tight">
+                  Cek Paket & Area XL / Axis
+                </h3>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-950 text-[9px] font-black tracking-wider uppercase whitespace-nowrap shadow-xs">
+                  Alat Cek
+                </span>
+              </div>
+              <p className="text-[11px] text-blue-200/90 mt-1 leading-snug line-clamp-2">
+                Cek sisa kuota, paket aktif, masa aktif & cek area nomor XL & Axis tanpa login.
+              </p>
+            </div>
+
+            {/* Action button */}
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/10 group-hover:bg-white/20 text-white text-xs font-bold flex-shrink-0 transition-colors border border-white/10 shadow-xs">
               <span>Buka</span>
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="w-3.5 h-3.5 text-blue-300" />
             </div>
           </div>
         </a>
