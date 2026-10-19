@@ -20,6 +20,7 @@ import ProductMargins from './pages/admin/ProductMargins';
 import TopupRequest from './pages/TopupRequest';
 import AdminTopupRequests from './pages/admin/TopupRequests';
 import BannerSettings from './pages/admin/BannerSettings';
+import PaymentAccounts from './pages/admin/PaymentAccounts';
 import KmspTools from './pages/KmspTools';
 import ApiSettings from './pages/admin/ApiSettings';
 
@@ -99,6 +100,14 @@ const App = () => (
             element={
               <ProtectedRoute adminOnly>
                 <AdminTopupRequests />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/rekening"
+            element={
+              <ProtectedRoute adminOnly>
+                <PaymentAccounts />
               </ProtectedRoute>
             }
           />

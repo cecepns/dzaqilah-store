@@ -18,12 +18,16 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 const uploadsRootDir = path.join(__dirname, 'uploads-raca-cell');
 const topupUploadDir = path.join(uploadsRootDir, 'topup');
 const bannersUploadDir = path.join(uploadsRootDir, 'banners');
+const paymentAccountsUploadDir = path.join(uploadsRootDir, 'payment-accounts');
 
 if (!fs.existsSync(topupUploadDir)) {
   fs.mkdirSync(topupUploadDir, { recursive: true });
 }
 if (!fs.existsSync(bannersUploadDir)) {
   fs.mkdirSync(bannersUploadDir, { recursive: true });
+}
+if (!fs.existsSync(paymentAccountsUploadDir)) {
+  fs.mkdirSync(paymentAccountsUploadDir, { recursive: true });
 }
 
 // Margin default hanya dipakai saat pertama kali seed database.
@@ -105,6 +109,24 @@ const bannerStorage = multer.diskStorage({
 
 const uploadBannerImage = multer({
   storage: bannerStorage,
+  fileFilter: topupUploadFilter,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB safety limit
+});
+
+// Konfigurasi Multer untuk Gambar / QRIS Rekening Pembayaran
+const paymentAccountStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, paymentAccountsUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `bank-${uniqueSuffix}${ext}`);
+  },
+});
+
+const uploadPaymentAccountImage = multer({
+  storage: paymentAccountStorage,
   fileFilter: topupUploadFilter,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB safety limit
 });
@@ -975,6 +997,48 @@ const initDatabase = async () => {
         INSERT INTO banners (title, description, badge, image_url, action_url, show_text, is_active, sort_order) VALUES
         ('QRIS Static Untuk Usahamu', 'MDR 0% & Pencairan Realtime', 'Fitur Unggulan', '/banners/promo_qris.jpg', '/request-topup', 1, 1, 1),
         ('Pulsa & Paket Data Termurah', 'Semua Operator Kilat 24 Jam', 'Diskon Spesial', '/banners/promo_pulsa.jpg', '/layanan/pulsa', 1, 1, 2)
+      `);
+    }
+
+    // ─── Payment Accounts Table & Topup Requests Alterations ───
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS payment_accounts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        bank_name VARCHAR(50) NOT NULL,
+        account_number VARCHAR(100) NOT NULL,
+        account_name VARCHAR(100) NOT NULL,
+        type ENUM('bank', 'ewallet', 'qris') NOT NULL DEFAULT 'bank',
+        qr_image VARCHAR(500) NULL,
+        instructions VARCHAR(255) NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        display_order INT NOT NULL DEFAULT 0,
+        created_by INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_payment_accounts_active (is_active, display_order)
+      )
+    `);
+
+    try {
+      await connection.query('ALTER TABLE topup_requests ADD COLUMN bank_name VARCHAR(50) NULL');
+    } catch (_) { }
+    try {
+      await connection.query('ALTER TABLE topup_requests ADD COLUMN account_number VARCHAR(100) NULL');
+    } catch (_) { }
+    try {
+      await connection.query('ALTER TABLE topup_requests ADD COLUMN account_name VARCHAR(100) NULL');
+    } catch (_) { }
+
+    const [existingAccounts] = await connection.query('SELECT id FROM payment_accounts LIMIT 1');
+    if (!existingAccounts.length) {
+      await connection.query(`
+        INSERT INTO payment_accounts (bank_name, account_number, account_name, type, display_order, is_active) VALUES
+        ('BRI', '022501013585534', 'ABDUL RAHMAN', 'bank', 1, 1),
+        ('BSI', '7349271995', 'ABDUL RAHMAN', 'bank', 2, 1),
+        ('DANA', '085299636873', 'ABDUL RAHMAN', 'ewallet', 3, 1),
+        ('GOPAY', '085299636873', 'ABDUL RAHMAN', 'ewallet', 4, 1),
+        ('OVO', '085299636873', 'ABDUL RAHMAN', 'ewallet', 5, 1)
       `);
     }
 
@@ -2659,7 +2723,7 @@ app.post('/api/topup-requests', authenticate, (req, res, next) => {
   });
 }, async (req, res) => {
   try {
-    const { amount, note } = req.body;
+    const { amount, note, bank_name, account_number, account_name } = req.body;
     const amt = parseFloat(amount);
     const proofImage = req.file ? `/uploads/topup/${req.file.filename}` : null;
 
@@ -2685,15 +2749,23 @@ app.post('/api/topup-requests', authenticate, (req, res, next) => {
     }
 
     const [result] = await pool.execute(
-      'INSERT INTO topup_requests (user_id, amount, note, proof_image) VALUES (?, ?, ?, ?)',
-      [req.user.id, amt, note?.trim() || null, proofImage]
+      'INSERT INTO topup_requests (user_id, amount, note, proof_image, bank_name, account_number, account_name) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [
+        req.user.id,
+        amt,
+        note?.trim() || null,
+        proofImage,
+        bank_name?.trim() || null,
+        account_number?.trim() || null,
+        account_name?.trim() || null,
+      ]
     );
 
     await logActivity(
       req.user.id,
       'topup_request',
-      `Request topup saldo Rp ${amt.toLocaleString('id-ID')}${proofImage ? ' (dengan bukti transfer)' : ''}`,
-      { requestId: result.insertId, amount: amt, hasProof: Boolean(proofImage) },
+      `Request topup saldo Rp ${amt.toLocaleString('id-ID')}${bank_name ? ` (Tujuan: ${bank_name})` : ''}${proofImage ? ' (dengan bukti transfer)' : ''}`,
+      { requestId: result.insertId, amount: amt, bank: bank_name, hasProof: Boolean(proofImage) },
       req.ip
     );
 
@@ -3179,6 +3251,257 @@ app.put('/api/banners/:id/toggle', authenticate, authorize('owner', 'admin'), as
   }
 });
 
+// ─── Payment Accounts / Rekening Pembayaran Routes ─────────────────────────
+
+app.get('/api/payment-accounts', authenticate, async (req, res) => {
+  try {
+    const isOwnerOrAdmin = ['owner', 'admin'].includes(req.user.role);
+    const showAll = req.query.all === 'true' && isOwnerOrAdmin;
+    const condition = showAll ? '' : 'WHERE is_active = 1';
+
+    const [rows] = await pool.query(
+      `SELECT * FROM payment_accounts ${condition} ORDER BY display_order ASC, id ASC`
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error('Get payment accounts error:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil daftar rekening' });
+  }
+});
+
+app.get('/api/admin/payment-accounts', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  try {
+    const { page, limit, offset } = getPagination(req.query);
+    const search = req.query.search?.trim() || '';
+    const type = req.query.type?.trim() || '';
+
+    let where = 'WHERE 1=1';
+    const params = [];
+
+    if (type && type !== 'all') {
+      where += ' AND type = ?';
+      params.push(type);
+    }
+    if (search) {
+      where += ' AND (bank_name LIKE ? OR account_number LIKE ? OR account_name LIKE ?)';
+      const s = `%${search}%`;
+      params.push(s, s, s);
+    }
+
+    const [countRows] = await pool.execute(
+      `SELECT COUNT(*) as total FROM payment_accounts ${where}`,
+      params
+    );
+    const total = countRows[0].total;
+
+    const [rows] = await pool.execute(
+      `SELECT pa.*, u.name as created_by_name
+       FROM payment_accounts pa
+       LEFT JOIN users u ON pa.created_by = u.id
+       ${where}
+       ORDER BY pa.display_order ASC, pa.id ASC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    );
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: paginationMeta(page, limit, total),
+    });
+  } catch (err) {
+    console.error('Admin get payment accounts error:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengambil data rekening' });
+  }
+});
+
+app.post('/api/admin/payment-accounts', authenticate, authorize('owner', 'admin'), (req, res, next) => {
+  uploadPaymentAccountImage.single('qr_image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file gambar QRIS' });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const { bank_name, account_number, account_name, type, instructions, display_order, is_active } = req.body;
+
+    if (!bank_name?.trim() || !account_number?.trim() || !account_name?.trim()) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ success: false, message: 'Nama bank, nomor rekening, dan atas nama wajib diisi' });
+    }
+
+    const qrImage = req.file ? `/uploads/payment-accounts/${req.file.filename}` : null;
+    const order = parseInt(display_order, 10) || 0;
+    const active = is_active === 'false' || is_active === false || is_active === 0 || is_active === '0' ? 0 : 1;
+    const accType = ['bank', 'ewallet', 'qris'].includes(type) ? type : 'bank';
+
+    const [result] = await pool.execute(
+      `INSERT INTO payment_accounts (bank_name, account_number, account_name, type, qr_image, instructions, display_order, is_active, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bank_name.trim().toUpperCase(),
+        account_number.trim(),
+        account_name.trim(),
+        accType,
+        qrImage,
+        instructions?.trim() || null,
+        order,
+        active,
+        req.user.id,
+      ]
+    );
+
+    await logActivity(
+      req.user.id,
+      'create_payment_account',
+      `Menambahkan rekening ${bank_name.toUpperCase()} - ${account_number} a.n ${account_name}`,
+      { id: result.insertId, bank_name, account_number },
+      req.ip
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Rekening pembayaran berhasil ditambahkan',
+      data: { id: result.insertId },
+    });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error('Create payment account error:', err);
+    res.status(500).json({ success: false, message: 'Gagal menambahkan rekening' });
+  }
+});
+
+app.put('/api/admin/payment-accounts/:id', authenticate, authorize('owner', 'admin'), (req, res, next) => {
+  uploadPaymentAccountImage.single('qr_image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file gambar QRIS' });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id, 10);
+    const [currentRows] = await pool.execute('SELECT * FROM payment_accounts WHERE id = ?', [accountId]);
+    if (!currentRows.length) {
+      if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+    }
+    const current = currentRows[0];
+
+    const { bank_name, account_number, account_name, type, instructions, display_order, is_active } = req.body;
+
+    let qrImage = current.qr_image;
+    if (req.file) {
+      qrImage = `/uploads/payment-accounts/${req.file.filename}`;
+      if (current.qr_image && current.qr_image.startsWith('/uploads/payment-accounts/')) {
+        const oldPath = path.join(uploadsRootDir, current.qr_image.replace('/uploads/', ''));
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+    }
+
+    const order = display_order !== undefined ? parseInt(display_order, 10) || 0 : current.display_order;
+    const active = is_active !== undefined ? (is_active === 'false' || is_active === false || is_active === 0 || is_active === '0' ? 0 : 1) : current.is_active;
+    const accType = type && ['bank', 'ewallet', 'qris'].includes(type) ? type : current.type;
+
+    await pool.execute(
+      `UPDATE payment_accounts SET
+         bank_name = ?,
+         account_number = ?,
+         account_name = ?,
+         type = ?,
+         qr_image = ?,
+         instructions = ?,
+         display_order = ?,
+         is_active = ?
+       WHERE id = ?`,
+      [
+        (bank_name || current.bank_name).trim().toUpperCase(),
+        (account_number || current.account_number).trim(),
+        (account_name || current.account_name).trim(),
+        accType,
+        qrImage,
+        instructions !== undefined ? (instructions?.trim() || null) : current.instructions,
+        order,
+        active,
+        accountId,
+      ]
+    );
+
+    await logActivity(
+      req.user.id,
+      'update_payment_account',
+      `Mengubah rekening ID ${accountId} (${bank_name || current.bank_name})`,
+      { id: accountId },
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Data rekening berhasil diperbarui' });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error('Update payment account error:', err);
+    res.status(500).json({ success: false, message: 'Gagal memperbarui rekening' });
+  }
+});
+
+app.put('/api/admin/payment-accounts/:id/toggle', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id, 10);
+    const [currentRows] = await pool.execute('SELECT id, is_active, bank_name FROM payment_accounts WHERE id = ?', [accountId]);
+    if (!currentRows.length) {
+      return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+    }
+    const newStatus = currentRows[0].is_active ? 0 : 1;
+    await pool.execute('UPDATE payment_accounts SET is_active = ? WHERE id = ?', [newStatus, accountId]);
+
+    await logActivity(
+      req.user.id,
+      'toggle_payment_account',
+      `Mengubah status rekening ${currentRows[0].bank_name} menjadi ${newStatus ? 'Aktif' : 'Nonaktif'}`,
+      { id: accountId, is_active: newStatus },
+      req.ip
+    );
+
+    res.json({
+      success: true,
+      message: `Rekening berhasil ${newStatus ? 'diaktifkan' : 'dinonaktifkan'}`,
+      data: { is_active: Boolean(newStatus) },
+    });
+  } catch (err) {
+    console.error('Toggle payment account error:', err);
+    res.status(500).json({ success: false, message: 'Gagal mengubah status rekening' });
+  }
+});
+
+app.delete('/api/admin/payment-accounts/:id', authenticate, authorize('owner', 'admin'), async (req, res) => {
+  try {
+    const accountId = parseInt(req.params.id, 10);
+    const [currentRows] = await pool.execute('SELECT * FROM payment_accounts WHERE id = ?', [accountId]);
+    if (!currentRows.length) {
+      return res.status(404).json({ success: false, message: 'Rekening tidak ditemukan' });
+    }
+    const current = currentRows[0];
+    if (current.qr_image && current.qr_image.startsWith('/uploads/payment-accounts/')) {
+      const oldPath = path.join(uploadsRootDir, current.qr_image.replace('/uploads/', ''));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    await pool.execute('DELETE FROM payment_accounts WHERE id = ?', [accountId]);
+
+    await logActivity(
+      req.user.id,
+      'delete_payment_account',
+      `Menghapus rekening ${current.bank_name} - ${current.account_number}`,
+      { id: accountId },
+      req.ip
+    );
+
+    res.json({ success: true, message: 'Rekening berhasil dihapus' });
+  } catch (err) {
+    console.error('Delete payment account error:', err);
+    res.status(500).json({ success: false, message: 'Gagal menghapus rekening' });
+  }
+});
+
 // ─── Announcement / Papan Pengumuman Routes ─────────────────────────────────
 
 app.get('/api/settings/announcement', async (req, res) => {
@@ -3567,7 +3890,11 @@ app.get('/api/kmsp/packages', authenticate, async (req, res) => {
     } else if (type === 'otp') {
       filtered = filtered.filter((p) => !p.no_need_login);
     } else if (type === 'akrab') {
-      filtered = filtered.filter((p) => p.is_akrab || p.is_circle);
+      filtered = filtered.filter((p) => {
+        const name = (p.package_name || '').toLowerCase();
+        const code = (p.package_code || '').toLowerCase();
+        return p.is_akrab || p.is_circle || name.includes('akrab') || code.includes('akrab');
+      });
     }
 
     // Search query
@@ -3582,6 +3909,16 @@ app.get('/api/kmsp/packages', authenticate, async (req, res) => {
 
     const marginsMap = await fetchProductMarginsMap();
     const mapped = filtered.map((p) => mapKmspPackage(p, marginsMap, req.user.role));
+
+    // Sort ready packages at the top
+    mapped.sort((a, b) => {
+      const aGangguan = Boolean(a.sedang_gangguan);
+      const bGangguan = Boolean(b.sedang_gangguan);
+      if (aGangguan !== bGangguan) {
+        return aGangguan ? 1 : -1;
+      }
+      return 0;
+    });
 
     res.json({
       success: true,
@@ -3634,7 +3971,11 @@ app.get('/api/products/kmsp', authenticate, async (req, res) => {
     } else if (type === 'otp') {
       data = data.filter((p) => !p.no_need_login);
     } else if (type === 'akrab') {
-      data = data.filter((p) => p.is_akrab || p.is_circle);
+      data = data.filter((p) => {
+        const name = (p.product_name || p.package_name || '').toLowerCase();
+        const code = (p.buyer_sku_code || p.package_code || '').toLowerCase();
+        return p.is_akrab || p.is_circle || name.includes('akrab') || code.includes('akrab');
+      });
     }
 
     if (search && search.trim()) {
@@ -3646,6 +3987,16 @@ app.get('/api/products/kmsp', authenticate, async (req, res) => {
           (p.package_description && p.package_description.toLowerCase().includes(q))
       );
     }
+
+    // Sort ready packages at the top
+    data.sort((a, b) => {
+      const aGangguan = Boolean(a.sedang_gangguan);
+      const bGangguan = Boolean(b.sedang_gangguan);
+      if (aGangguan !== bGangguan) {
+        return aGangguan ? 1 : -1;
+      }
+      return 0;
+    });
 
     const { page, limit, offset } = getPagination(req.query);
     const total = data.length;

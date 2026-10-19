@@ -152,6 +152,9 @@ CREATE TABLE IF NOT EXISTS topup_requests (
   amount DECIMAL(15, 2) NOT NULL,
   note TEXT,
   proof_image VARCHAR(255) NULL,
+  bank_name VARCHAR(50) NULL,
+  account_number VARCHAR(100) NULL,
+  account_name VARCHAR(100) NULL,
   status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   admin_note TEXT,
   processed_by INT,
@@ -205,6 +208,31 @@ CREATE TABLE IF NOT EXISTS banners (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_banners_active (is_active, sort_order)
 );
+
+-- ─── 006: Rekening / Payment Accounts Support ──────────────────────────────
+CREATE TABLE IF NOT EXISTS payment_accounts (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  bank_name VARCHAR(50) NOT NULL,
+  account_number VARCHAR(100) NOT NULL,
+  account_name VARCHAR(100) NOT NULL,
+  type ENUM('bank', 'ewallet', 'qris') NOT NULL DEFAULT 'bank',
+  qr_image VARCHAR(500) NULL,
+  instructions VARCHAR(255) NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  display_order INT NOT NULL DEFAULT 0,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_payment_accounts_active (is_active, display_order)
+);
+
+INSERT INTO payment_accounts (bank_name, account_number, account_name, type, display_order, is_active) VALUES
+('BRI', '022501013585534', 'ABDUL RAHMAN', 'bank', 1, 1),
+('BSI', '7349271995', 'ABDUL RAHMAN', 'bank', 2, 1),
+('DANA', '085299636873', 'ABDUL RAHMAN', 'ewallet', 3, 1),
+('GOPAY', '085299636873', 'ABDUL RAHMAN', 'ewallet', 4, 1),
+('OVO', '085299636873', 'ABDUL RAHMAN', 'ewallet', 5, 1);
 
 -- Default owner dibuat otomatis saat server pertama kali dijalankan
 -- Email: owner@racacell.com | Password: password123

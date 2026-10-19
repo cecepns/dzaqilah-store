@@ -37,6 +37,7 @@ import {
   ExternalLink,
   Radio,
   KeyRound,
+  CreditCard,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -200,6 +201,7 @@ const Home = () => {
   const adminActions = [
     { to: '/admin/users', icon: Users, label: 'Kelola Users', color: 'from-purple-500 to-indigo-600' },
     { to: '/admin/topup-requests', icon: PlusCircle, label: 'Request Topup', color: 'from-emerald-500 to-teal-600' },
+    { to: '/admin/rekening', icon: CreditCard, label: 'Rekening Topup', color: 'from-blue-600 to-indigo-700' },
     { to: '/admin/saldo', icon: WalletCards, label: 'Topup Saldo', color: 'from-green-500 to-emerald-600' },
     { to: '/admin/banners', icon: Megaphone, label: 'Banner & Pengumuman', color: 'from-pink-500 to-rose-600' },
     { to: '/admin/logs', icon: History, label: 'Log Aktivitas', color: 'from-amber-500 to-orange-600' },

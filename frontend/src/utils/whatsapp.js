@@ -9,9 +9,17 @@ export const buildWhatsAppUrl = (phone, message) => {
 export const buildWhatsAppShareUrl = (message) =>
   `https://wa.me/?text=${encodeURIComponent(message)}`;
 
-export const buildTopupWhatsAppMessage = (user, amount) =>
-  `Halo Admin Dzaqilah Store,\n\nSaya ingin request topup saldo:\n` +
-  `Nama: ${user?.name}\n` +
-  `Email: ${user?.email}\n` +
-  `Nominal: Rp ${Number(amount).toLocaleString('id-ID')}\n\n` +
-  `Mohon konfirmasi. Terima kasih.`;
+export const buildTopupWhatsAppMessage = (user, amount, paymentAccount = null) => {
+  let msg = `Halo Admin Dzaqilah Store,\n\nSaya ingin request topup saldo:\n` +
+    `Nama: ${user?.name || '-'}\n` +
+    `Email: ${user?.email || '-'}\n` +
+    `Nominal: Rp ${Number(amount || 0).toLocaleString('id-ID')}\n`;
+
+  if (paymentAccount?.bank_name) {
+    msg += `Tujuan Transfer: ${paymentAccount.bank_name} - ${paymentAccount.account_number || ''} (a.n ${paymentAccount.account_name || ''})\n`;
+  }
+
+  msg += `\nMohon konfirmasi. Terima kasih.`;
+  return msg;
+};
+

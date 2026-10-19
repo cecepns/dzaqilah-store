@@ -68,9 +68,18 @@ export const API_ENDPOINTS = {
     APPROVE: (id) => `/topup-requests/${id}/approve`,
     REJECT: (id) => `/topup-requests/${id}/reject`,
   },
+  PAYMENT_ACCOUNTS: {
+    LIST: '/payment-accounts',
+    ADMIN_LIST: '/admin/payment-accounts',
+    CREATE: '/admin/payment-accounts',
+    UPDATE: (id) => `/admin/payment-accounts/${id}`,
+    DELETE: (id) => `/admin/payment-accounts/${id}`,
+    TOGGLE: (id) => `/admin/payment-accounts/${id}/toggle`,
+  },
   KMSP: {
     SETTINGS: '/kmsp/settings',
     EXECUTE: '/kmsp/execute',
     PACKAGES: '/kmsp/packages',
   },
 };
+

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Shield,
   Smartphone,
@@ -24,6 +24,7 @@ import {
   Search,
   ShoppingCart,
   Copy,
+  Sparkles,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/layout/Header';
@@ -107,15 +108,28 @@ const KmspTools = () => {
     }
   };
 
+  const sortedPackages = useMemo(() => {
+    return [...packages].sort((a, b) => {
+      const aGangguan = Boolean(a.sedang_gangguan);
+      const bGangguan = Boolean(b.sedang_gangguan);
+      if (aGangguan !== bGangguan) {
+        return aGangguan ? 1 : -1; // Ready (!sedang_gangguan) diletakkan paling atas
+      }
+      return 0;
+    });
+  }, [packages]);
+
   useEffect(() => {
     fetchSettings();
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'packages') {
+    if (activeTab !== 'packages') return;
+    const timer = setTimeout(() => {
       fetchPackages();
-    }
-  }, [activeTab, brandFilter, typeFilter]);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [activeTab, brandFilter, typeFilter, searchQuery]);
 
   const handleUpdateSettings = async (updates) => {
     try {
@@ -581,6 +595,33 @@ const KmspTools = () => {
                 </button>
               </div>
 
+              {/* Cek Kuota XL & AXIS (Khusus Admin & Owner) */}
+              {(isAdmin || isOwner) && (
+                <div className="bg-gradient-to-r from-blue-50/80 to-cyan-50/80 p-3.5 rounded-2xl border-2 border-blue-200/90 shadow-xs flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-600 text-white flex items-center justify-center font-bold shadow-xs">
+                      <Radio className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-xs text-gray-900">Cek Kuota XL & AXIS</h4>
+                        <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-bold">Khusus Admin</span>
+                      </div>
+                      <p className="text-[11px] text-gray-600">Cek sisa kuota, paket aktif & detail nomor</p>
+                    </div>
+                  </div>
+                  <a
+                    href="https://my.kmsp-store.com/58fc0af5709e42d8973bfd4f48957e6b.php"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white text-xs font-bold rounded-xl shadow-xs active:scale-95 transition-all flex items-center gap-1.5 flex-shrink-0"
+                  >
+                    <span>Cek Kuota</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+
               {/* Detail Kuota Anggota Paket Akrab */}
               <div className="bg-white p-3.5 rounded-2xl border border-gray-200/90 shadow-xs flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -693,43 +734,196 @@ const KmspTools = () => {
                 </button>
               </div>
 
-              {/* Filters */}
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-[11px]">
-                {['all', 'XL', 'AXIS'].map((b) => (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => setBrandFilter(b)}
-                    className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
-                      brandFilter === b
-                        ? 'bg-teal-700 text-white shadow-xs'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {b === 'all' ? 'Semua Brand' : b}
-                  </button>
-                ))}
-                <div className="h-4 w-px bg-gray-200 mx-1 flex-shrink-0" />
-                {[
-                  { id: 'all', label: 'Semua Tipe' },
-                  { id: 'no_otp', label: 'NO OTP' },
-                  { id: 'otp', label: 'Butuh OTP' },
-                  { id: 'akrab', label: 'Akrab / Circle' },
-                ].map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTypeFilter(t.id)}
-                    className={`px-2.5 py-1 rounded-lg font-bold whitespace-nowrap transition-all ${
-                      typeFilter === t.id
-                        ? 'bg-indigo-700 text-white shadow-xs'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+              {/* Brand Filter Buttons */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    Pilih Operator / Brand
+                  </span>
+                  {brandFilter === 'XL' && (
+                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                      XL Axiata
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-[11px]">
+                  {[
+                    { id: 'all', label: 'Semua Brand' },
+                    { id: 'XL', label: 'XL', badge: 'Populer' },
+                    { id: 'AXIS', label: 'AXIS' },
+                  ].map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        setBrandFilter(b.id);
+                        if (b.id !== 'XL' && typeFilter === 'akrab') {
+                          setTypeFilter('all');
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                        brandFilter === b.id
+                          ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <span>{b.label}</span>
+                      {b.badge && (
+                        <span className={`text-[9px] px-1 py-0.2 rounded-full font-bold ${
+                          brandFilter === b.id ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-800'
+                        }`}>
+                          {b.badge}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
+
+              {/* Sub-kategori: Muncul di bawah ketika memilih XL */}
+              {brandFilter === 'XL' && (
+                <div className="p-2.5 bg-gradient-to-r from-purple-50/80 via-indigo-50/60 to-purple-50/80 rounded-xl border border-purple-200 space-y-1.5 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-purple-600" />
+                      Kategori Pilihan XL
+                    </span>
+                    <span className="text-[10px] text-purple-700 font-medium">
+                      Pilih AKRAB untuk paket bersama
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('akrab')}
+                      className={`px-3.5 py-1.5 rounded-xl font-black transition-all flex items-center gap-1.5 shadow-xs ${
+                        typeFilter === 'akrab'
+                          ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white ring-2 ring-purple-300'
+                          : 'bg-white text-purple-800 border-2 border-purple-300 hover:bg-purple-100'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      AKRAB
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                        typeFilter === 'akrab' ? 'bg-white/25 text-white' : 'bg-purple-600 text-white'
+                      }`}>
+                        Paling Laris
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('all')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                        typeFilter === 'all'
+                          ? 'bg-teal-700 text-white shadow-xs'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      Semua Paket XL
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('no_otp')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 ${
+                        typeFilter === 'no_otp'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                      NO OTP
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('otp')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 ${
+                        typeFilter === 'otp'
+                          ? 'bg-amber-700 text-white shadow-xs'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                      Butuh OTP
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-kategori: Jika memilih AXIS */}
+              {brandFilter === 'AXIS' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('all')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                        typeFilter === 'all'
+                          ? 'bg-teal-700 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      Semua AXIS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('no_otp')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 ${
+                        typeFilter === 'no_otp'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                      NO OTP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTypeFilter('otp')}
+                      className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 ${
+                        typeFilter === 'otp'
+                          ? 'bg-amber-700 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Lock className="w-3.5 h-3.5 text-amber-600" />
+                      Butuh OTP
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-kategori: Jika memilih Semua Brand */}
+              {brandFilter === 'all' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-[11px]">
+                    {[
+                      { id: 'all', label: 'Semua Tipe' },
+                      { id: 'akrab', label: 'Akrab / Circle', icon: Users },
+                      { id: 'no_otp', label: 'NO OTP', icon: Unlock },
+                      { id: 'otp', label: 'Butuh OTP', icon: Lock },
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setTypeFilter(t.id)}
+                        className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+                          typeFilter === t.id
+                            ? t.id === 'akrab'
+                              ? 'bg-purple-700 text-white shadow-xs'
+                              : 'bg-indigo-700 text-white shadow-xs'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {t.icon && <t.icon className="w-3 h-3" />}
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* List Paket */}
@@ -738,7 +932,7 @@ const KmspTools = () => {
                 <LoadingSpinner size="lg" />
                 <p className="mt-3 text-xs text-gray-500 font-semibold">Memuat paket dari DZ STORE...</p>
               </div>
-            ) : packages.length === 0 ? (
+            ) : sortedPackages.length === 0 ? (
               <div className="bg-white p-6 rounded-2xl border border-gray-200 text-center">
                 <PackageCheck className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                 <p className="text-xs font-bold text-gray-700">Tidak ada paket ditemukan</p>
@@ -746,20 +940,39 @@ const KmspTools = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-[11px] font-bold text-gray-500 px-1">
-                  Menampilkan {packages.length} paket
-                </p>
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[11px] font-bold text-gray-500">
+                    Menampilkan {sortedPackages.length} paket
+                  </p>
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Paket Ready di Atas
+                  </span>
+                </div>
 
-                {packages.map((pkg) => (
+                {sortedPackages.map((pkg) => (
                   <div
                     key={pkg.package_code}
-                    className="bg-white p-3.5 rounded-2xl border border-gray-200/90 shadow-xs hover:border-teal-200 transition-all space-y-2.5"
+                    className={`bg-white p-3.5 rounded-2xl border shadow-xs transition-all space-y-2.5 ${
+                      pkg.sedang_gangguan
+                        ? 'border-red-200 bg-red-50/15'
+                        : 'border-gray-200/90 hover:border-teal-200'
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {pkg.no_need_login ? (
+                          {!pkg.sedang_gangguan ? (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-md">
+                              <AlertCircle className="w-3 h-3 text-red-600" /> Gangguan
+                            </span>
+                          )}
+
+                          {pkg.no_need_login ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-md">
                               <Unlock className="w-3 h-3" /> NO OTP
                             </span>
                           ) : (
@@ -768,13 +981,7 @@ const KmspTools = () => {
                             </span>
                           )}
 
-                          {pkg.sedang_gangguan && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-md">
-                              <AlertCircle className="w-3 h-3" /> Gangguan
-                            </span>
-                          )}
-
-                          {(pkg.is_akrab || pkg.is_circle) && (
+                          {(pkg.is_akrab || pkg.is_circle || (pkg.package_name && pkg.package_name.toLowerCase().includes('akrab')) || (pkg.package_code && pkg.package_code.toLowerCase().includes('akrab'))) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-md">
                               <Users className="w-3 h-3" /> Akrab
                             </span>
@@ -881,12 +1088,12 @@ const KmspTools = () => {
                         }}
                         className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs ${
                           pkg.sedang_gangguan
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
                             : 'bg-teal-700 hover:bg-teal-800 text-white active:scale-95'
                         }`}
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
-                        Beli Sekarang
+                        {pkg.sedang_gangguan ? 'Sedang Gangguan' : 'Beli Sekarang'}
                       </button>
                     </div>
                   </div>

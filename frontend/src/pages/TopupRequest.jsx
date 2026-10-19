@@ -1,6 +1,19 @@
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { Wallet, Send, Upload, Trash2, Eye, Image as ImageIcon } from 'lucide-react';
+import {
+  Wallet,
+  Send,
+  Upload,
+  Trash2,
+  Eye,
+  Image as ImageIcon,
+  Copy,
+  CheckCircle2,
+  CreditCard,
+  Building2,
+  Smartphone,
+  QrCode,
+} from 'lucide-react';
 import Header from '../components/layout/Header';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import EmptyState from '../components/ui/EmptyState';
@@ -37,6 +50,11 @@ const TopupRequest = () => {
   const [contact, setContact] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
 
+  // Payment accounts state (BRI, BSI, DANA, GOPAY, OVO, etc.)
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
   // State Bukti Transfer (Opsional) & Compressor.js
   const [proofFile, setProofFile] = useState(null);
   const [proofPreview, setProofPreview] = useState(null);
@@ -63,13 +81,37 @@ const TopupRequest = () => {
     }
   };
 
+  const fetchPaymentAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const res = await get(API_ENDPOINTS.PAYMENT_ACCOUNTS.LIST);
+      const list = res.data || [];
+      setPaymentAccounts(list);
+      if (list.length > 0) {
+        setSelectedAccount((prev) => prev || list[0]);
+      }
+    } catch (err) {
+      console.error('Gagal mengambil daftar rekening pembayaran:', err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
   useEffect(() => {
     get(API_ENDPOINTS.SETTINGS.CONTACT).then((res) => setContact(res.data)).catch(() => { });
+    fetchPaymentAccounts();
   }, []);
 
   useEffect(() => {
     fetchRequests();
   }, [pagination.page, pagination.limit]);
+
+  const copyToClipboard = (text, label = 'Nomor rekening') => {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(text);
+      toast.success(`${label} berhasil disalin!`);
+    }
+  };
 
   // Handle pilih & kompres gambar bukti transfer
   const handleFileChange = async (e) => {
@@ -141,6 +183,11 @@ const TopupRequest = () => {
       if (note?.trim()) {
         formData.append('note', note.trim());
       }
+      if (selectedAccount) {
+        formData.append('bank_name', selectedAccount.bank_name);
+        formData.append('account_number', selectedAccount.account_number);
+        formData.append('account_name', selectedAccount.account_name);
+      }
       if (proofFile) {
         formData.append('proof', proofFile);
       }
@@ -158,14 +205,18 @@ const TopupRequest = () => {
     }
   };
 
-  const openWhatsApp = (requestAmount) => {
+  const openWhatsApp = (requestAmount, targetAccount = selectedAccount) => {
     if (!contact?.admin_whatsapp) {
       toast.error('Nomor WhatsApp admin belum diatur');
       return;
     }
-    const url = buildWhatsAppUrl(contact.admin_whatsapp, buildTopupWhatsAppMessage(user, requestAmount || amount));
+    const url = buildWhatsAppUrl(
+      contact.admin_whatsapp,
+      buildTopupWhatsAppMessage(user, requestAmount || amount, targetAccount)
+    );
     if (url) window.open(url, '_blank');
   };
+
 
   const hasPending = requests.some((r) => r.status === 'pending');
 
@@ -181,8 +232,136 @@ const TopupRequest = () => {
             </div>
             <div>
               <h3 className="font-medium text-gray-900">Ajukan Topup</h3>
-              <p className="text-xs text-gray-500">Admin akan memproses request Anda</p>
+              <p className="text-xs text-gray-500">Pilih rekening tujuan & admin akan memproses topup Anda</p>
             </div>
+          </div>
+
+          {/* Opsi Rekening Tujuan Transfer */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-teal-600" />
+                Pilih Rekening Tujuan Transfer <span className="text-rose-500">*</span>
+              </label>
+              {paymentAccounts.length > 0 && (
+                <span className="text-[11px] font-medium text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-200">
+                  {paymentAccounts.length} Rekening Aktif
+                </span>
+              )}
+            </div>
+
+            {loadingAccounts ? (
+              <div className="py-6 flex items-center justify-center gap-2 text-xs text-gray-500">
+                <LoadingSpinner size="sm" />
+                <span>Memuat rekening pembayaran...</span>
+              </div>
+            ) : paymentAccounts.length === 0 ? (
+              <div className="p-3.5 bg-gray-50 border rounded-xl text-center text-xs text-gray-500">
+                Belum ada rekening pembayaran aktif dari admin.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {paymentAccounts.map((acc) => {
+                  const isSelected = selectedAccount?.id === acc.id;
+                  return (
+                    <div
+                      key={acc.id}
+                      onClick={() => !hasPending && setSelectedAccount(acc)}
+                      className={`relative p-3 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-teal-500 bg-teal-50/60 shadow-xs ring-2 ring-teal-500/20'
+                          : 'border-gray-200 bg-white hover:border-teal-300 hover:bg-gray-50/50'
+                      } ${hasPending ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                              isSelected
+                                ? 'bg-teal-600 text-white shadow-xs'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {acc.type === 'qris' ? (
+                              <QrCode className="w-4 h-4" />
+                            ) : acc.type === 'ewallet' ? (
+                              <Smartphone className="w-4 h-4" />
+                            ) : (
+                              <Building2 className="w-4 h-4" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-sm text-gray-900">
+                                {acc.bank_name}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-gray-100 text-gray-600 uppercase">
+                                {acc.type === 'bank' ? 'Bank' : acc.type === 'ewallet' ? 'E-Wallet' : 'QRIS'}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              a.n <strong className="text-gray-800">{acc.account_name}</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center">
+                          <div
+                            className={`w-5 h-5 rounded-full flex items-center justify-center border transition ${
+                              isSelected
+                                ? 'bg-teal-600 border-teal-600 text-white'
+                                : 'border-gray-300 bg-white'
+                            }`}
+                          >
+                            {isSelected && <CheckCircle2 className="w-4 h-4 text-white" />}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Nomor Rekening & Tombol Salin */}
+                      <div className="mt-2 pt-2 border-t border-gray-100/90 flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-gray-150">
+                        <span className="font-mono font-bold text-sm text-gray-900 tracking-wider">
+                          {acc.account_number}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(acc.account_number, `Nomor ${acc.bank_name}`);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-teal-50 hover:bg-teal-100 text-teal-700 text-xs font-semibold active:scale-95 transition border border-teal-200"
+                        >
+                          <Copy className="w-3 h-3" />
+                          Salin
+                        </button>
+                      </div>
+
+                      {/* Instructions / Image preview */}
+                      {(acc.instructions || acc.image_url) && (
+                        <div className="mt-1.5 flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
+                          {acc.instructions ? (
+                            <span className="italic truncate pr-2 text-gray-600">"{acc.instructions}"</span>
+                          ) : <span />}
+                          {acc.image_url && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewModalUrl(getMediaUrl(acc.image_url));
+                              }}
+                              className="text-teal-700 font-semibold hover:underline flex items-center gap-1 flex-shrink-0"
+                            >
+                              <QrCode className="w-3 h-3" />
+                              Lihat QRIS / Gambar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div>
@@ -197,6 +376,7 @@ const TopupRequest = () => {
               disabled={hasPending}
               className="w-full px-4 py-3 bg-white text-gray-900 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
             />
+
             <div className="flex gap-2 mt-2 flex-wrap">
               {TOPUP_PRESETS.map(({ value, label }) => (
                 <button
@@ -366,6 +546,16 @@ const TopupRequest = () => {
                     </span>
                   </div>
                   <p className="text-xs text-gray-400">{formatDate(req.created_at)}</p>
+
+                  {req.bank_name && (
+                    <div className="mt-2 p-2 bg-blue-50/70 rounded-lg border border-blue-100 flex items-center justify-between text-xs">
+                      <span className="text-gray-500 font-medium">Tujuan:</span>
+                      <span className="font-bold text-blue-900">
+                        {req.bank_name} • {req.account_number} ({req.account_name})
+                      </span>
+                    </div>
+                  )}
+
                   {req.note && <p className="text-xs text-gray-500 mt-1">Catatan: {req.note}</p>}
                   {req.admin_note && <p className="text-xs text-gray-500 mt-1">Admin: {req.admin_note}</p>}
 
@@ -387,7 +577,13 @@ const TopupRequest = () => {
 
                   {req.status === 'pending' && contact?.admin_whatsapp && (
                     <button
-                      onClick={() => openWhatsApp(req.amount)}
+                      onClick={() =>
+                        openWhatsApp(req.amount, {
+                          bank_name: req.bank_name,
+                          account_number: req.account_number,
+                          account_name: req.account_name,
+                        })
+                      }
                       className="mt-2.5 text-xs text-green-600 font-medium flex items-center gap-1.5 hover:text-green-700"
                     >
                       <WhatsAppIcon className="w-3.5 h-3.5" /> Hubungi Admin

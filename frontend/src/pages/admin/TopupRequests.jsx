@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Check, X, Eye, Image as ImageIcon } from 'lucide-react';
+import { Check, X, Eye, Image as ImageIcon, CreditCard } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import SearchInput from '../../components/ui/SearchInput';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
@@ -77,6 +78,19 @@ const TopupRequests = () => {
       <Header title="Request Topup" subtitle="Kelola permintaan topup saldo user" />
 
       <div className="max-w-mobile mx-auto px-3.5 pt-3.5 space-y-3">
+        <div className="flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-blue-600" />
+            <span className="text-xs font-semibold text-gray-700">Rekening Pembayaran</span>
+          </div>
+          <Link
+            to="/admin/rekening"
+            className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
+          >
+            Kelola Rekening →
+          </Link>
+        </div>
+
         <SearchInput value={search} onChange={setSearch} placeholder="Cari user..." />
 
         <div className="flex gap-2 overflow-x-auto">
@@ -112,6 +126,16 @@ const TopupRequests = () => {
                 </div>
                 <p className="text-lg font-bold text-teal-600">{formatCurrency(req.amount)}</p>
                 <p className="text-xs text-gray-400 mt-1">{formatDate(req.created_at)}</p>
+
+                {req.bank_name && (
+                  <div className="mt-2 p-2 bg-blue-50/80 rounded-lg border border-blue-100 flex flex-wrap items-center justify-between gap-1 text-xs">
+                    <span className="text-gray-500 font-medium">Tujuan:</span>
+                    <span className="font-bold text-blue-900">
+                      {req.bank_name} • {req.account_number} ({req.account_name})
+                    </span>
+                  </div>
+                )}
+
                 {req.note && <p className="text-xs text-gray-500 mt-1">Catatan: {req.note}</p>}
                 {req.admin_note && <p className="text-xs text-gray-500 mt-1">Respon: {req.admin_note}</p>}
 
@@ -168,6 +192,15 @@ const TopupRequests = () => {
             <p className="text-sm text-gray-600">
               {modal.request.user_name} — <strong>{formatCurrency(modal.request.amount)}</strong>
             </p>
+
+            {modal.request.bank_name && (
+              <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-900">
+                <span className="text-gray-500">Tujuan Transfer: </span>
+                <span className="font-bold">
+                  {modal.request.bank_name} • {modal.request.account_number} ({modal.request.account_name})
+                </span>
+              </div>
+            )}
 
             {modal.request.proof_image && (
               <div className="border rounded-xl p-2.5 bg-gray-50 flex items-center gap-3">
