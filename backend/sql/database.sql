@@ -131,9 +131,9 @@ ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
 CREATE TABLE IF NOT EXISTS product_margins (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  buyer_sku_code VARCHAR(50) NOT NULL UNIQUE,
+  buyer_sku_code VARCHAR(100) NOT NULL UNIQUE,
   product_name VARCHAR(200) NOT NULL,
-  transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid',
+  transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid',
   margin_percent DECIMAL(5, 2) NOT NULL,
   reseller_margin_percent DECIMAL(5, 2) NULL DEFAULT NULL,
   updated_by INT,

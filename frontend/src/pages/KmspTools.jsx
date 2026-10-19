@@ -580,9 +580,15 @@ const KmspTools = () => {
                       </div>
 
                       <div className="text-right flex-shrink-0">
-                        <span className="text-xs font-black text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200 block">
-                          {pkg.package_harga || `Rp ${(pkg.package_harga_int || 0).toLocaleString('id-ID')}`}
+                        <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200 block">
+                          Rp {Number(pkg.price || pkg.selling_price || pkg.package_harga_int || 0).toLocaleString('id-ID')}
                         </span>
+                        {isPrivileged && pkg.original_price > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-1 flex flex-col items-end">
+                            <span>Modal: Rp {Number(pkg.original_price).toLocaleString('id-ID')}</span>
+                            <span className="text-purple-700 font-semibold">Margin {pkg.margin_percent}%</span>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -621,8 +627,13 @@ const KmspTools = () => {
                         type="button"
                         disabled={pkg.sedang_gangguan}
                         onClick={() => {
+                          const modalData = {
+                            packageName: pkg.package_name,
+                            price: pkg.price || pkg.selling_price,
+                          };
                           if (pkg.no_need_login) {
                             openActionModal({
+                              ...modalData,
                               title: `Beli Paket NO OTP`,
                               action: 'beli_paket_no_otp',
                               category: 'public',
@@ -633,6 +644,7 @@ const KmspTools = () => {
                             });
                           } else {
                             openActionModal({
+                              ...modalData,
                               title: `Beli Paket dengan OTP`,
                               action: 'beli_paket_otp',
                               category: 'public',
@@ -1070,6 +1082,21 @@ const KmspTools = () => {
           }}
           className="space-y-3"
         >
+          {activeActionModal?.price && (
+            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-3 rounded-xl flex items-center justify-between text-xs shadow-xs">
+              <div className="min-w-0 pr-2">
+                <p className="text-[10px] text-teal-700 font-semibold uppercase tracking-wider">Paket Dipilih</p>
+                <p className="font-bold text-teal-950 truncate">{activeActionModal.packageName}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-[10px] text-teal-700 font-semibold uppercase tracking-wider">Harga Jual</p>
+                <p className="font-black text-teal-900 text-sm">
+                  Rp {Number(activeActionModal.price).toLocaleString('id-ID')}
+                </p>
+              </div>
+            </div>
+          )}
+
           {activeActionModal?.fields?.map((field) => (
             <div key={field.name} className="space-y-1">
               <label className="text-xs font-bold text-gray-700">{field.label}</label>

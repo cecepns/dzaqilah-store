@@ -22,6 +22,7 @@ export const API_ENDPOINTS = {
   PRODUCTS: {
     PREPAID: '/products/prepaid',
     PASCA: '/products/pasca',
+    KMSP: '/products/kmsp',
     BRANDS: '/products/brands',
     TYPES: '/products/types',
     CATEGORIES: '/products/categories',

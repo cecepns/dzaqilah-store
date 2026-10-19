@@ -16,6 +16,7 @@ import { SERVICES } from '../../constants/services';
 const TYPE_TABS = [
   { id: 'prepaid', label: 'Prabayar' },
   { id: 'pasca', label: 'Pascabayar' },
+  { id: 'kmsp', label: 'Paket Akrab (DZ Store)' },
 ];
 
 const ProductMargins = () => {
@@ -38,17 +39,25 @@ const ProductMargins = () => {
 
   const debouncedSearch = useDebounce(search);
   const isPasca = productType === 'pasca';
-  const productsEndpoint = isPasca ? API_ENDPOINTS.PRODUCTS.PASCA : API_ENDPOINTS.PRODUCTS.PREPAID;
+  const isKmsp = productType === 'kmsp';
+  const productsEndpoint = isKmsp
+    ? API_ENDPOINTS.PRODUCTS.KMSP
+    : isPasca
+    ? API_ENDPOINTS.PRODUCTS.PASCA
+    : API_ENDPOINTS.PRODUCTS.PREPAID;
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await get(productsEndpoint, {
+      const params = {
         page: pagination.page,
         limit: pagination.limit,
         search: debouncedSearch,
-        service: selectedService,
-      });
+      };
+      if (!isKmsp) {
+        params.service = selectedService;
+      }
+      const res = await get(productsEndpoint, params);
       setProducts(res.data);
       setPagination(res.pagination);
       setGlobalMargin(res.member_margin_percent ?? res.margin_percent ?? globalMargin);
@@ -94,7 +103,10 @@ const ProductMargins = () => {
   }, [debouncedSearch, productType, customPagination.page, customPagination.limit, activeTab]);
 
   const openEdit = (product) => {
-    setEditProduct(product);
+    setEditProduct({
+      ...product,
+      price: parseFloat(product.original_price ?? product.price ?? 0),
+    });
     const currentMember = product.custom_margin_percent ?? product.margin_percent ?? globalMargin;
     const currentReseller = product.custom_reseller_margin_percent ?? product.reseller_margin_percent ?? globalResellerMargin;
     setMarginInput(String(currentMember));
@@ -120,7 +132,7 @@ const ProductMargins = () => {
         margin_percent: memVal,
         reseller_margin_percent: resVal,
         product_name: editProduct.product_name,
-        transaction_type: isPasca ? 'pasca' : 'prepaid',
+        transaction_type: isKmsp ? 'kmsp' : isPasca ? 'pasca' : 'prepaid',
       });
       toast.success(res.message);
       setEditProduct(null);
@@ -154,7 +166,7 @@ const ProductMargins = () => {
   };
 
   const previewSelling = (product, marginValue) => {
-    const base = parseFloat(product.price) || 0;
+    const base = parseFloat(product.original_price ?? product.price) || 0;
     const margin = parseFloat(marginValue) || 0;
     return Math.ceil(base + (base * margin) / 100);
   };
@@ -206,7 +218,7 @@ const ProductMargins = () => {
               onClick={() => {
                 setProductType(tab.id);
                 if (tab.id === 'pasca') setSelectedService('pln-pasca');
-                else setSelectedService('pulsa');
+                else if (tab.id === 'prepaid') setSelectedService('pulsa');
               }}
               className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${
                 productType === tab.id
@@ -243,8 +255,8 @@ const ProductMargins = () => {
           </button>
         </div>
 
-        {/* Filter Services if browse */}
-        {activeTab === 'browse' && (
+        {/* Filter Services if browse (hanya untuk prepaid & pasca) */}
+        {activeTab === 'browse' && !isKmsp && (
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             {SERVICES.filter((s) => s.type === productType).map((svc) => (
               <button
@@ -259,6 +271,14 @@ const ProductMargins = () => {
                 {svc.label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* Info Banner for KMSP if browse */}
+        {activeTab === 'browse' && isKmsp && (
+          <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-2.5 rounded-xl flex items-center justify-between text-xs text-teal-900 shadow-xs">
+            <span className="font-semibold">Katalog Paket XL & AXIS DZ Store</span>
+            <span className="text-[11px] text-teal-700 bg-white px-2 py-0.5 rounded-lg border border-teal-200 font-mono font-bold">180+ Produk Live</span>
           </div>
         )}
 
@@ -282,10 +302,10 @@ const ProductMargins = () => {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 text-sm truncate">{product.product_name}</p>
-                    <p className="text-xs text-gray-500">{product.buyer_sku_code} • {product.brand}</p>
+                    <p className="text-xs text-gray-500">{product.buyer_sku_code} • {product.brand || (isKmsp ? 'DZ Store' : '')}</p>
                     {!isPasca && (
                       <p className="text-xs text-gray-600 mt-1">
-                        Modal: <span className="font-medium">{formatCurrency(product.price)}</span>
+                        Modal: <span className="font-medium">{formatCurrency(product.original_price ?? product.price)}</span>
                       </p>
                     )}
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">

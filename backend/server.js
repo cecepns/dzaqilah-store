@@ -560,6 +560,35 @@ const mapPascaProducts = (products, marginsMap = productMargins, role = 'user') 
       };
     });
 
+const mapKmspPackage = (p, marginsMap = productMargins, role = 'user') => {
+  const code = p.package_code || p.buyer_sku_code || '';
+  const skuKey = normalizeSkuCode(code);
+  const custom = marginsMap.get(skuKey);
+  const hasCustomMargin = marginsMap.has(skuKey);
+  const effectiveMargin = getEffectiveMargin(code, role, marginsMap);
+  const originalPrice = parseFloat(p.package_harga_int ?? p.package_price ?? p.price ?? 0);
+  const sellingPrice = calcSellingPrice(originalPrice, code, role, marginsMap);
+  const memberPrice = calcSellingPrice(originalPrice, code, 'user', marginsMap);
+  const resellerPrice = calcSellingPrice(originalPrice, code, 'reseller', marginsMap);
+
+  return {
+    ...p,
+    buyer_sku_code: code,
+    product_name: p.package_name || p.product_name || code,
+    brand: p.brand || (code.toLowerCase().includes('axis') ? 'AXIS' : 'XL'),
+    original_price: originalPrice,
+    price: sellingPrice,
+    selling_price: sellingPrice,
+    member_price: memberPrice,
+    reseller_price: resellerPrice,
+    margin_percent: effectiveMargin,
+    custom_margin_percent: custom ? custom.margin_percent : null,
+    custom_reseller_margin_percent: custom ? custom.reseller_margin_percent : null,
+    has_custom_margin: hasCustomMargin,
+    transaction_type: 'kmsp',
+  };
+};
+
 const processDigiflazzTopup = async (refId, buyerSkuCode, customerNo) => {
   const body = {
     username: DIGIFLAZZ_USERNAME,
@@ -779,7 +808,7 @@ const initDatabase = async () => {
 
     try {
       await connection.query('ALTER TABLE settings MODIFY COLUMN setting_value TEXT NOT NULL');
-    } catch (_) {}
+    } catch (_) { }
 
     const [marginSetting] = await connection.query(
       "SELECT id FROM settings WHERE setting_key = 'margin_percent' LIMIT 1"
@@ -888,9 +917,9 @@ const initDatabase = async () => {
     await connection.query(`
       CREATE TABLE IF NOT EXISTS product_margins (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        buyer_sku_code VARCHAR(50) NOT NULL UNIQUE,
+        buyer_sku_code VARCHAR(100) NOT NULL UNIQUE,
         product_name VARCHAR(200) NOT NULL,
-        transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid',
+        transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid',
         margin_percent DECIMAL(5, 2) NOT NULL,
         reseller_margin_percent DECIMAL(5, 2) NULL DEFAULT NULL,
         updated_by INT,
@@ -908,6 +937,17 @@ const initDatabase = async () => {
       );
     } catch (err) {
       if (err.code !== 'ER_DUP_FIELDNAME') console.error('Failed to add reseller_margin_percent to product_margins:', err.message);
+    }
+
+    try {
+      await connection.query(
+        'ALTER TABLE product_margins MODIFY COLUMN buyer_sku_code VARCHAR(100) NOT NULL'
+      );
+      await connection.query(
+        "ALTER TABLE product_margins MODIFY COLUMN transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid'"
+      );
+    } catch (err) {
+      // ignore
     }
 
     await connection.query(`
@@ -1804,7 +1844,7 @@ app.get('/api/products/margins', authenticate, authorize('owner', 'admin'), asyn
       query += ' AND (product_name LIKE ? OR buyer_sku_code LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
-    if (transactionType && ['prepaid', 'pasca'].includes(transactionType)) {
+    if (transactionType && ['prepaid', 'pasca', 'kmsp'].includes(transactionType)) {
       query += ' AND transaction_type = ?';
       params.push(transactionType);
     }
@@ -1860,7 +1900,7 @@ app.put('/api/products/margins/:buyer_sku_code', authenticate, authorize('owner'
       return res.status(400).json({ success: false, message: 'Margin reseller harus antara 0% - 100%' });
     }
 
-    const type = transaction_type === 'pasca' ? 'pasca' : 'prepaid';
+    const type = transaction_type === 'pasca' ? 'pasca' : transaction_type === 'kmsp' ? 'kmsp' : 'prepaid';
     const name = (product_name || buyerSkuCode).trim().slice(0, 200);
 
     await pool.execute(
@@ -3220,71 +3260,411 @@ const canUserAccessKmspAdmin = (role, config) => {
   return false;
 };
 
-const callKmspEndpoint = async (action, queryParams = {}, payload = null) => {
-  const config = await getKmspConfig();
-  const baseUrl = config.baseUrl.replace(/\/+$/, '');
+const KMSP_MICROSERVICES = {
+  // Public & Package catalog
+  packagelist: 'https://golang-openapi-packagelist-xltembakservice.kmsp-store.com/v1',
+  daftar_paket: 'https://golang-openapi-packagelist-xltembakservice.kmsp-store.com/v1',
+  daftar_produk: 'https://golang-openapi-packagelist-xltembakservice.kmsp-store.com/v1',
 
-  const params = new URLSearchParams();
-  params.set('api_key', config.apiKey);
-  params.set('action', action);
-  for (const [k, v] of Object.entries(queryParams || {})) {
-    if (v !== undefined && v !== null && v !== '') {
-      params.set(k, String(v));
+  // Balance & Check Transaction
+  panel_balance: 'https://golang-openapi-panelaccountbalance-xltembakservice.kmsp-store.com/v1',
+  cek_saldo_panel: 'https://golang-openapi-panelaccountbalance-xltembakservice.kmsp-store.com/v1',
+  balance: 'https://golang-openapi-panelaccountbalance-xltembakservice.kmsp-store.com/v1',
+  check_transaction: 'https://golang-openapi-checktransaction-xltembakservice.kmsp-store.com/v1',
+  cek_status_transaksi: 'https://golang-openapi-checktransaction-xltembakservice.kmsp-store.com/v1',
+
+  // Authentication & Sessions
+  req_otp: 'https://golang-openapi-reqotp-xltembakservice.kmsp-store.com/v1',
+  request_otp: 'https://golang-openapi-reqotp-xltembakservice.kmsp-store.com/v1',
+  login: 'https://golang-openapi-login-xltembakservice.kmsp-store.com/v1',
+  login_otp: 'https://golang-openapi-login-xltembakservice.kmsp-store.com/v1',
+  access_tokens: 'https://golang-openapi-accesstokenlist-xltembakservice.kmsp-store.com/v1',
+  access_token_list: 'https://golang-openapi-accesstokenlist-xltembakservice.kmsp-store.com/v1',
+
+  // Package Stock & Area
+  package_stock: 'https://golang-openapi-checkpackagestock-xltembakservice.kmsp-store.com/v1',
+  cek_stok_paket: 'https://golang-openapi-checkpackagestock-xltembakservice.kmsp-store.com/v1',
+  stock_akrab_circle: 'https://golang-openapi-checkpackagestockakrabglobal-xltembakservice.kmsp-store.com/v1',
+  cek_stok_akrab_circle: 'https://golang-openapi-checkpackagestockakrabglobal-xltembakservice.kmsp-store.com/v1',
+  subscriber_location: 'https://golang-openapi-subscriberlocation-xltembakservice.kmsp-store.com/v1',
+  cek_lokasi: 'https://golang-openapi-subscriberlocation-xltembakservice.kmsp-store.com/v1',
+
+  // Subscriber info & packages
+  subscriber_info: 'https://golang-openapi-subscriberinfo-xltembakservice.kmsp-store.com/v1',
+  cek_pulsa: 'https://golang-openapi-subscriberinfo-xltembakservice.kmsp-store.com/v1',
+  quota_details: 'https://golang-openapi-quotadetails-xltembakservice.kmsp-store.com/v1',
+  cek_paket_aktif: 'https://golang-openapi-quotadetails-xltembakservice.kmsp-store.com/v1',
+  unreg_package: 'https://golang-openapi-unregpackage-xltembakservice.kmsp-store.com/v1',
+  unreg_paket: 'https://golang-openapi-unregpackage-xltembakservice.kmsp-store.com/v1',
+
+  // Purchase
+  package_purchase: 'https://golang-openapi-packagepurchase-xltembakservice.kmsp-store.com/v1',
+  beli_paket: 'https://golang-openapi-packagepurchase-xltembakservice.kmsp-store.com/v1',
+  beli_paket_no_otp: 'https://golang-openapi-packagepurchase-xltembakservice.kmsp-store.com/v1',
+  beli_paket_otp: 'https://golang-openapi-packagepurchase-xltembakservice.kmsp-store.com/v1',
+
+  // AKMT (Akrab Pengelola Management Tools)
+  akmt_pengelola: 'https://golang-openapi-akmtgetpengelolalist-xltembakservice.kmsp-store.com/v1',
+  akmt_daftar_pengelola: 'https://golang-openapi-akmtgetpengelolalist-xltembakservice.kmsp-store.com/v1',
+  daftar_pengelola: 'https://golang-openapi-akmtgetpengelolalist-xltembakservice.kmsp-store.com/v1',
+
+  akmt_slot: 'https://golang-openapi-akmtgetpengelolaslotlist-xltembakservice.kmsp-store.com/v1',
+  akmt_slot_anggota: 'https://golang-openapi-akmtgetpengelolaslotlist-xltembakservice.kmsp-store.com/v1',
+  slot_anggota: 'https://golang-openapi-akmtgetpengelolaslotlist-xltembakservice.kmsp-store.com/v1',
+
+  akmt_add_pengelola: 'https://golang-openapi-akmtaddpengelola-xltembakservice.kmsp-store.com/v1',
+  akmt_tambah_pengelola: 'https://golang-openapi-akmtaddpengelola-xltembakservice.kmsp-store.com/v1',
+  tambah_pengelola: 'https://golang-openapi-akmtaddpengelola-xltembakservice.kmsp-store.com/v1',
+
+  akmt_invite: 'https://golang-openapi-akmtinviteanggota-xltembakservice.kmsp-store.com/v1',
+  akmt_invite_anggota: 'https://golang-openapi-akmtinviteanggota-xltembakservice.kmsp-store.com/v1',
+  invite_anggota: 'https://golang-openapi-akmtinviteanggota-xltembakservice.kmsp-store.com/v1',
+
+  akmt_member_quota: 'https://golang-openapi-akmtmemberquotadetails-xltembakservice.kmsp-store.com/v1',
+  akmt_detail_kuota: 'https://golang-openapi-akmtmemberquotadetails-xltembakservice.kmsp-store.com/v1',
+  detail_kuota_akrab: 'https://golang-openapi-akmtmemberquotadetails-xltembakservice.kmsp-store.com/v1',
+
+  akmt_set_kuber: 'https://golang-openapi-akmtsetkuber-xltembakservice.kmsp-store.com/v1',
+  set_kuber: 'https://golang-openapi-akmtsetkuber-xltembakservice.kmsp-store.com/v1',
+
+  akmt_kick: 'https://golang-openapi-akmtmemberkick-xltembakservice.kmsp-store.com/v1',
+  akmt_kick_anggota: 'https://golang-openapi-akmtmemberkick-xltembakservice.kmsp-store.com/v1',
+  kick_anggota: 'https://golang-openapi-akmtmemberkick-xltembakservice.kmsp-store.com/v1',
+
+  akmt_buy_slot: 'https://golang-openapi-akmtbuyextraslot-xltembakservice.kmsp-store.com/v1',
+  akmt_beli_slot: 'https://golang-openapi-akmtbuyextraslot-xltembakservice.kmsp-store.com/v1',
+  beli_slot_tambahan: 'https://golang-openapi-akmtbuyextraslot-xltembakservice.kmsp-store.com/v1',
+
+  akmt_delete_slot: 'https://golang-openapi-akmtdeleteextraslot-xltembakservice.kmsp-store.com/v1',
+  hapus_slot_tambahan: 'https://golang-openapi-akmtdeleteextraslot-xltembakservice.kmsp-store.com/v1',
+
+  // CIMT (Circle Management)
+  cimt_pengelola: 'https://golang-openapi-cimtgetpengelolalist-xltembakservice.kmsp-store.com/v1',
+  cimt_add_pengelola: 'https://golang-openapi-cimtaddpengelola-xltembakservice.kmsp-store.com/v1',
+  cimt_family_list: 'https://golang-openapi-cimtfamilymemberlist-xltembakservice.kmsp-store.com/v1',
+  cimt_group_create: 'https://golang-openapi-cimtgroupcreate-xltembakservice.kmsp-store.com/v1',
+  cimt_group_status: 'https://golang-openapi-cimtgroupstatus-xltembakservice.kmsp-store.com/v1',
+  cimt_group_disband: 'https://golang-openapi-cimtgroupdisband-xltembakservice.kmsp-store.com/v1',
+  cimt_invite_member: 'https://golang-openapi-cimtinvitemember-xltembakservice.kmsp-store.com/v1',
+  cimt_kick_member: 'https://golang-openapi-cimtkickmember-xltembakservice.kmsp-store.com/v1',
+  cimt_msisdn_checker: 'https://golang-openapi-cimtmsisdnchecker-xltembakservice.kmsp-store.com/v1',
+  cimt_redeemable_bonus: 'https://golang-openapi-cimtredeemablebonuslist-xltembakservice.kmsp-store.com/v1',
+  cimt_redeem_bonus: 'https://golang-openapi-cimtredeembonus-xltembakservice.kmsp-store.com/v1',
+  cimt_gift_bonus: 'https://golang-openapi-cimtgiftbonus-xltembakservice.kmsp-store.com/v1',
+  cimt_invitation_accept: 'https://golang-openapi-cimtinvitationaccept-xltembakservice.kmsp-store.com/v1',
+};
+
+const normalizeKmspParams = (action, rawParams = {}) => {
+  const norm = { ...rawParams };
+
+  // normalize phone / msisdn
+  const phoneVal = norm.phone || norm.msisdn || norm.no_hp || norm.nomor;
+  if (phoneVal) {
+    norm.phone = String(phoneVal).trim();
+    norm.msisdn = String(phoneVal).trim();
+  }
+
+  // parent phone / pengelola
+  const parentVal = norm.parent_phone || norm.parent_msisdn || norm.pengelola;
+  if (parentVal) {
+    norm.parent_phone = String(parentVal).trim();
+    norm.parent_msisdn = String(parentVal).trim();
+    if (!norm.phone) norm.phone = String(parentVal).trim();
+    if (!norm.msisdn) norm.msisdn = String(parentVal).trim();
+  }
+
+  // member phone / anggota
+  const memberVal = norm.member_phone || norm.member_msisdn || norm.anggota;
+  if (memberVal) {
+    norm.member_phone = String(memberVal).trim();
+    norm.member_msisdn = String(memberVal).trim();
+  }
+
+  // package_id / package_code
+  const packageVal = norm.package_code || norm.package_id || norm.service_code || norm.kode_paket;
+  if (packageVal) {
+    norm.package_code = String(packageVal).trim();
+    norm.package_id = String(packageVal).trim();
+  }
+
+  // encrypted_package_code for unreg
+  if (action === 'unreg_paket' || action === 'unreg_package') {
+    const encVal = norm.encrypted_package_code || norm.package_code || norm.package_id;
+    if (encVal) {
+      norm.encrypted_package_code = String(encVal).trim();
     }
   }
 
-  const candidateUrls = [
-    `${baseUrl}/v1?${params.toString()}`,
-    `${baseUrl}/api/v1?${params.toString()}`,
-    `${baseUrl}/webapis/v1?${params.toString()}`,
-  ];
+  // slot / slots_count
+  const slotVal = norm.slot_no || norm.slot || norm.slots_count;
+  if (slotVal) {
+    norm.slot = String(slotVal).trim();
+    norm.slot_no = String(slotVal).trim();
+    norm.slots_count = String(slotVal).trim();
+  }
 
+  // quota / kuber
+  const quotaVal = norm.quota_gb || norm.kuber || norm.quota;
+  if (quotaVal) {
+    norm.quota_gb = String(quotaVal).trim();
+    norm.kuber = String(quotaVal).trim();
+    norm.quota = String(quotaVal).trim();
+  }
+
+  // payment method default for purchases
+  if (action.includes('purchase') || action.includes('beli_paket')) {
+    if (!norm.payment_method) {
+      norm.payment_method = 'BALANCE';
+    }
+  }
+
+  // family member id
+  const memberIdVal = norm.member_id || norm.family_member_id;
+  if (memberIdVal) {
+    norm.member_id = String(memberIdVal).trim();
+    norm.family_member_id = String(memberIdVal).trim();
+  }
+
+  // transaction id / trx_id
+  const trxVal = norm.trx_id || norm.transaction_id || norm.ref_id;
+  if (trxVal) {
+    norm.trx_id = String(trxVal).trim();
+    norm.transaction_id = String(trxVal).trim();
+  }
+
+  return norm;
+};
+
+const callKmspEndpoint = async (action, rawParams = {}, payload = null) => {
+  const config = await getKmspConfig();
+  const normalizedAction = String(action || '').toLowerCase().trim();
+  const normalizedParams = normalizeKmspParams(normalizedAction, rawParams);
+
+  // Determine target microservice URL
+  let targetUrl = KMSP_MICROSERVICES[normalizedAction];
+  if (!targetUrl) {
+    const baseUrl = config.baseUrl.replace(/\/+$/, '');
+    targetUrl = `${baseUrl}/v1`;
+  }
+
+  const urlObj = new URL(targetUrl);
+  urlObj.searchParams.set('api_key', config.apiKey);
+
+  // Set all query params
+  for (const [k, v] of Object.entries(normalizedParams)) {
+    if (v !== undefined && v !== null && v !== '') {
+      urlObj.searchParams.set(k, String(v));
+    }
+  }
+
+  const isPost = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
   const headers = {
-    'Accept': 'application/json',
-    'x-api-key': config.apiKey,
-    'Authorization': `Bearer ${config.apiKey}`,
+    Accept: 'application/json',
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DzaqilahCell/1.0',
   };
 
-  let lastError = null;
-  for (const url of candidateUrls) {
-    try {
-      const isPost = payload && typeof payload === 'object' && Object.keys(payload).length > 0;
-      const opts = {
-        method: isPost ? 'POST' : 'GET',
-        headers: { ...headers },
-      };
-      if (isPost) {
-        opts.headers['Content-Type'] = 'application/json';
-        opts.body = JSON.stringify(payload);
-      }
+  const opts = {
+    method: isPost ? 'POST' : 'GET',
+    headers,
+  };
 
-      const resp = await fetch(url, opts);
-      const ct = resp.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        const json = await resp.json();
-        return { ok: resp.ok, status: resp.status, data: json };
-      } else {
-        const text = await resp.text();
-        if (resp.ok && text.trim().startsWith('{')) {
-          try {
-            return { ok: true, status: resp.status, data: JSON.parse(text) };
-          } catch {
-            // ignore
-          }
-        }
-      }
-    } catch (err) {
-      lastError = err;
-    }
+  if (isPost) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(payload);
   }
 
-  return {
-    ok: false,
-    status: 502,
-    message: lastError ? lastError.message : 'KMSP Store API tidak merespons atau sedang dalam pemeliharaan.',
-  };
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    opts.signal = controller.signal;
+
+    const resp = await fetch(urlObj.toString(), opts);
+    clearTimeout(timeoutId);
+
+    const ct = resp.headers.get('content-type') || '';
+    let resultJson = null;
+
+    if (ct.includes('application/json')) {
+      resultJson = await resp.json();
+    } else {
+      const text = await resp.text();
+      try {
+        resultJson = JSON.parse(text);
+      } catch {
+        return {
+          ok: false,
+          status: resp.status,
+          message: text.substring(0, 300) || 'Respon bukan format JSON yang valid',
+          data: null,
+        };
+      }
+    }
+
+    const isKmspSuccess = resultJson.status === true || (resultJson.statusCode === 200 && resultJson.status !== false);
+    return {
+      ok: resp.ok && isKmspSuccess,
+      status: resultJson.statusCode || resp.status,
+      message: resultJson.message || (isKmspSuccess ? 'Sukses' : 'Gagal memproses aksi KMSP'),
+      data: resultJson.data ?? resultJson,
+      raw: resultJson,
+    };
+  } catch (err) {
+    const isTimeout = err.name === 'AbortError';
+    return {
+      ok: false,
+      status: isTimeout ? 504 : 502,
+      message: isTimeout ? 'KMSP API timeout setelah 20 detik' : `Gagal menghubungi server KMSP: ${err.message}`,
+      data: null,
+    };
+  }
 };
+
+let kmspPackagesCache = {
+  timestamp: 0,
+  data: [],
+  announcements: [],
+  data_updated_at: '',
+};
+
+app.get('/api/kmsp/packages', authenticate, async (req, res) => {
+  try {
+    const { search, brand, type, force_refresh } = req.query;
+    const now = Date.now();
+    const isExpired = now - kmspPackagesCache.timestamp > 3 * 60 * 1000; // 3 menit cache
+
+    if (force_refresh === 'true' || isExpired || kmspPackagesCache.data.length === 0) {
+      const kmspResult = await callKmspEndpoint('packagelist');
+      if (kmspResult.ok && Array.isArray(kmspResult.data)) {
+        kmspPackagesCache = {
+          timestamp: now,
+          data: kmspResult.data,
+          announcements: kmspResult.raw?.announcements || [],
+          data_updated_at: kmspResult.raw?.data_updated_at || '',
+        };
+      } else if (kmspPackagesCache.data.length === 0) {
+        return res.status(502).json({
+          success: false,
+          message: kmspResult.message || 'Gagal memuat katalog produk KMSP',
+        });
+      }
+    }
+
+    let filtered = [...kmspPackagesCache.data];
+
+    // Filter brand: XL or AXIS
+    if (brand && brand !== 'all') {
+      const bUpper = brand.toUpperCase();
+      filtered = filtered.filter((p) => {
+        const name = (p.package_name || '').toUpperCase();
+        const code = (p.package_code || '').toUpperCase();
+        return name.includes(bUpper) || code.includes(bUpper);
+      });
+    }
+
+    // Filter type: no_otp, otp, akrab
+    if (type === 'no_otp') {
+      filtered = filtered.filter((p) => p.no_need_login);
+    } else if (type === 'otp') {
+      filtered = filtered.filter((p) => !p.no_need_login);
+    } else if (type === 'akrab') {
+      filtered = filtered.filter((p) => p.is_akrab || p.is_circle);
+    }
+
+    // Search query
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter((p) =>
+        (p.package_name && p.package_name.toLowerCase().includes(q)) ||
+        (p.package_code && p.package_code.toLowerCase().includes(q)) ||
+        (p.package_description && p.package_description.toLowerCase().includes(q))
+      );
+    }
+
+    const marginsMap = await fetchProductMarginsMap();
+    const mapped = filtered.map((p) => mapKmspPackage(p, marginsMap, req.user.role));
+
+    res.json({
+      success: true,
+      data: mapped,
+      meta: {
+        total: mapped.length,
+        total_all: kmspPackagesCache.data.length,
+        cached_at: new Date(kmspPackagesCache.timestamp).toISOString(),
+        announcements: kmspPackagesCache.announcements,
+        data_updated_at: kmspPackagesCache.data_updated_at,
+        member_margin_percent: marginPercent,
+        reseller_margin_percent: resellerMarginPercent,
+        user_role: req.user.role,
+      },
+    });
+  } catch (err) {
+    console.error('Get KMSP packages error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengambil daftar produk Paket Akrab DZ Store' });
+  }
+});
+
+app.get('/api/products/kmsp', authenticate, async (req, res) => {
+  try {
+    const { search, brand, type } = req.query;
+    const now = Date.now();
+    const isExpired = now - kmspPackagesCache.timestamp > 3 * 60 * 1000;
+
+    if (isExpired || kmspPackagesCache.data.length === 0) {
+      const kmspResult = await callKmspEndpoint('packagelist');
+      if (kmspResult.ok && Array.isArray(kmspResult.data)) {
+        kmspPackagesCache = {
+          timestamp: now,
+          data: kmspResult.data,
+          announcements: kmspResult.raw?.announcements || [],
+          data_updated_at: kmspResult.raw?.data_updated_at || '',
+        };
+      }
+    }
+
+    const marginsMap = await fetchProductMarginsMap();
+    let data = kmspPackagesCache.data.map((p) => mapKmspPackage(p, marginsMap, req.user.role));
+
+    if (brand && brand !== 'all') {
+      const bUpper = brand.toUpperCase();
+      data = data.filter((p) => (p.brand && p.brand.toUpperCase() === bUpper) || (p.product_name && p.product_name.toUpperCase().includes(bUpper)));
+    }
+
+    if (type === 'no_otp') {
+      data = data.filter((p) => p.no_need_login);
+    } else if (type === 'otp') {
+      data = data.filter((p) => !p.no_need_login);
+    } else if (type === 'akrab') {
+      data = data.filter((p) => p.is_akrab || p.is_circle);
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      data = data.filter(
+        (p) =>
+          (p.product_name && p.product_name.toLowerCase().includes(q)) ||
+          (p.buyer_sku_code && p.buyer_sku_code.toLowerCase().includes(q)) ||
+          (p.package_description && p.package_description.toLowerCase().includes(q))
+      );
+    }
+
+    const { page, limit, offset } = getPagination(req.query);
+    const total = data.length;
+    const paginated = data.slice(offset, offset + limit);
+
+    res.json({
+      success: true,
+      data: paginated,
+      pagination: paginationMeta(page, limit, total),
+      margin_percent: req.user.role === 'reseller' ? resellerMarginPercent : marginPercent,
+      member_margin_percent: marginPercent,
+      reseller_margin_percent: resellerMarginPercent,
+      user_role: req.user.role,
+    });
+  } catch (err) {
+    console.error('Get KMSP products error:', err.message);
+    res.status(500).json({ success: false, message: 'Gagal mengambil daftar produk Paket Akrab DZ Store' });
+  }
+});
 
 app.get('/api/kmsp/settings', authenticate, async (req, res) => {
   try {
@@ -3386,21 +3766,21 @@ app.post('/api/kmsp/execute', authenticate, async (req, res) => {
       req.user.id,
       `kmsp_${action}`,
       `Menjalankan fitur KMSP: ${action} (${category || 'general'})`,
-      { params, result_status: kmspResult.status },
+      { params, result_status: kmspResult.status, is_success: kmspResult.ok },
       req.ip
     );
 
-    if (kmspResult.ok && kmspResult.data) {
+    if (kmspResult.ok) {
       return res.json({
         success: true,
-        message: kmspResult.data.message || 'Permintaan berhasil diproses oleh KMSP',
-        data: sanitizeSensitiveObject(kmspResult.data.data ?? kmspResult.data),
+        message: kmspResult.message || 'Permintaan berhasil diproses oleh KMSP',
+        data: sanitizeSensitiveObject(kmspResult.data),
       });
     }
 
-    res.status(kmspResult.status >= 400 && kmspResult.status < 600 ? kmspResult.status : 200).json({
-      success: kmspResult.ok,
-      message: kmspResult.data?.message || kmspResult.message || `Respon KMSP (status ${kmspResult.status})`,
+    return res.json({
+      success: false,
+      message: kmspResult.message || `Respon KMSP (status ${kmspResult.status})`,
       data: sanitizeSensitiveObject(kmspResult.data) || null,
     });
   } catch (err) {
