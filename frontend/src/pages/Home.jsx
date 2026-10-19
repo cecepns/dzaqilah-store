@@ -205,7 +205,7 @@ const Home = () => {
     { to: '/admin/logs', icon: History, label: 'Log Aktivitas', color: 'from-amber-500 to-orange-600' },
     { to: '/admin/margin', icon: Percent, label: 'Pengaturan', color: 'from-blue-500 to-cyan-600' },
     { to: '/admin/product-margins', icon: Percent, label: 'Margin Produk', color: 'from-rose-500 to-pink-600' },
-    { to: '/kmsp-tools', icon: Radio, label: 'DZ Store Paket Akrab', color: 'from-cyan-600 to-blue-700' },
+    { to: '/dz-tools', icon: Radio, label: 'DZ Store Paket Akrab', color: 'from-cyan-600 to-blue-700' },
     ...(isOwner ? [{ to: '/admin/api-settings', icon: KeyRound, label: 'Kelola API Provider', color: 'from-violet-600 to-purple-800' }] : []),
   ];
 
@@ -583,9 +583,9 @@ const Home = () => {
             </span>
           </a>
 
-          {/* Menu Paket Akrab & Injeksi (KMSP) */}
+          {/* Menu Paket Akrab & Injeksi (DZ Tools) */}
           <Link
-            to="/kmsp-tools"
+            to="/dz-tools"
             className="bg-white border border-teal-100 rounded-2xl p-2.5 flex flex-col items-center text-center shadow-xs hover:shadow-md hover:border-teal-300 active:scale-95 transition-all group"
           >
             <div className="relative mb-1.5">

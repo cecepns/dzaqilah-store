@@ -477,7 +477,7 @@ const ApiSettings = () => {
                   </div>
                 </div>
                 <Link
-                  to="/kmsp-tools"
+                  to="/dz-tools"
                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[11px] font-semibold transition-colors"
                 >
                   Buka Layanan DZ STORE

@@ -52,7 +52,8 @@ const App = () => (
           <Route path="/riwayat-saldo" element={<BalanceHistory />} />
           <Route path="/request-topup" element={<TopupRequest />} />
           <Route path="/profil" element={<Profile />} />
-          <Route path="/kmsp-tools" element={<KmspTools />} />
+          <Route path="/dz-tools" element={<KmspTools />} />
+          <Route path="/kmsp-tools" element={<Navigate to="/dz-tools" replace />} />
           <Route
             path="/admin/users"
             element={

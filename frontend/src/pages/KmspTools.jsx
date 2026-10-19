@@ -35,7 +35,7 @@ import { API_ENDPOINTS } from '../utils/endpoints';
 
 const KmspTools = () => {
   const { user, isAdmin, isOwner, isReseller } = useAuth();
-  const [activeTab, setActiveTab] = useState('public');
+  const [activeTab, setActiveTab] = useState('tembak');
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [executing, setExecuting] = useState(false);
   const [settings, setSettings] = useState({
@@ -207,65 +207,287 @@ const KmspTools = () => {
         <div className="flex bg-white p-1 rounded-2xl border border-gray-200/80 shadow-xs gap-1 overflow-x-auto scrollbar-hide">
           <button
             type="button"
-            onClick={() => setActiveTab('public')}
-            className={`flex-1 min-w-[95px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${activeTab === 'public'
+            onClick={() => setActiveTab('tembak')}
+            className={`flex-1 min-w-[100px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+              activeTab === 'tembak'
                 ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
                 : 'text-gray-600 hover:text-gray-900'
-              }`}
+            }`}
+          >
+            Tembak Paket
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('public')}
+            className={`flex-1 min-w-[95px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+              activeTab === 'public'
+                ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
           >
             Layanan
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('packages')}
-            className={`flex-1 min-w-[105px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${activeTab === 'packages'
+            className={`flex-1 min-w-[105px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+              activeTab === 'packages'
                 ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
                 : 'text-gray-600 hover:text-gray-900'
-              }`}
+            }`}
           >
             Katalog Paket
           </button>
 
           {canAccessAdminTools && (
-            <>
-              <button
-                type="button"
-                onClick={() => setActiveTab('akmt')}
-                className={`flex-1 min-w-[100px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${activeTab === 'akmt'
-                    ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                  }`}
-              >
-                AKMT
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('tembak')}
-                className={`flex-1 min-w-[100px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${activeTab === 'tembak'
-                    ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                  }`}
-              >
-                Tembak Paket
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setActiveTab('akmt')}
+              className={`flex-1 min-w-[100px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+                activeTab === 'akmt'
+                  ? 'bg-gradient-to-r from-teal-700 to-cyan-700 text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              AKMT
+            </button>
           )}
 
           {isPrivileged && (
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
-              className={`flex-1 min-w-[90px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${activeTab === 'settings'
+              className={`flex-1 min-w-[90px] py-2 px-2 rounded-xl text-xs font-bold transition-all text-center ${
+                activeTab === 'settings'
                   ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow-xs'
                   : 'text-gray-600 hover:text-gray-900'
-                }`}
+              }`}
             >
               Pengaturan
             </button>
           )}
         </div>
 
-        {/* ─── TAB 1: LAYANAN SEMUA ROLE ───────────────────────────────── */}
+        {/* ─── TAB 1: TEMBAK PAKET DATA XL & AXIS (PALING KIRI / PERTAMA) ── */}
+        {activeTab === 'tembak' && (
+          canAccessAdminTools ? (
+            <div className="space-y-2.5">
+              <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 p-3 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-orange-950">Tembak Paket Data XL & AXIS</p>
+                  <p className="text-[11px] text-orange-700">Otentikasi OTP, Session Token, & Injeksi Paket</p>
+                </div>
+                <span className="text-[10px] bg-orange-600 text-white px-2 py-0.5 rounded-full font-bold">
+                  API v1
+                </span>
+              </div>
+
+              {/* Injeksi Langsung */}
+              <div className="grid grid-cols-1 gap-2">
+                <div className="bg-gradient-to-r from-emerald-50/70 to-teal-50/70 p-3 rounded-2xl border-2 border-emerald-300 shadow-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-xs">
+                      <Unlock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-xs text-gray-900">Pembelian Paket NO OTP</h4>
+                        <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.2 rounded font-bold">Instan</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600">Tembak langsung tanpa kode verifikasi OTP</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openActionModal({
+                      title: 'Pembelian Paket NO OTP',
+                      action: 'beli_paket_no_otp',
+                      category: 'public',
+                      fields: [
+                        { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
+                        { name: 'package_id', label: 'Kode Paket (Contoh: SXLEDU15GB7D_PREV)', placeholder: 'Masukkan kode paket' },
+                      ]
+                    })}
+                    className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs active:scale-95 transition-all"
+                  >
+                    Beli
+                  </button>
+                </div>
+
+                <div className="bg-gradient-to-r from-amber-50/70 to-orange-50/70 p-3 rounded-2xl border-2 border-amber-300 shadow-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold shadow-xs">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-bold text-xs text-gray-900">Pembelian Paket dengan OTP</h4>
+                        <span className="text-[9px] bg-amber-600 text-white px-1.5 py-0.2 rounded font-bold">Verifikasi</span>
+                      </div>
+                      <p className="text-[10px] text-gray-600">Beli paket membutuhkan kode OTP via SMS</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openActionModal({
+                      title: 'Pembelian Paket dengan OTP',
+                      action: 'beli_paket_otp',
+                      category: 'public',
+                      fields: [
+                        { name: 'phone', label: 'Nomor HP Tujuan', placeholder: '08xxxx', defaultValue: savedPhone },
+                        { name: 'package_id', label: 'ID Paket / Service Code', placeholder: 'Masukkan ID paket' },
+                        { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi SMS' },
+                        { name: 'access_token', label: 'Access Token (Opsional jika sudah login)', placeholder: 'Session Token', defaultValue: savedAccessToken },
+                      ]
+                    })}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs active:scale-95 transition-all"
+                  >
+                    Proses
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => openActionModal({
+                    title: 'Request OTP',
+                    action: 'request_otp',
+                    category: 'tembak_paket',
+                    fields: [{ name: 'phone', label: 'Nomor HP XL/AXIS', placeholder: '08xxxx', defaultValue: savedPhone }]
+                  })}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <Send className="w-5 h-5 text-indigo-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Request OTP</h4>
+                  <p className="text-[10px] text-gray-500">Kirim kode OTP ke nomor</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openActionModal({
+                    title: 'Login OTP (Dapatkan Token)',
+                    action: 'login_otp',
+                    category: 'tembak_paket',
+                    fields: [
+                      { name: 'phone', label: 'Nomor HP XL/AXIS', placeholder: '08xxxx', defaultValue: savedPhone },
+                      { name: 'auth_id', label: 'Auth ID (otomatis dari Request OTP)', placeholder: 'Auth ID verifikasi', defaultValue: savedAuthId },
+                      { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi' }
+                    ]
+                  })}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <KeyRound className="w-5 h-5 text-emerald-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Login OTP</h4>
+                  <p className="text-[10px] text-gray-500">Verifikasi & simpan token</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExecute('tembak_paket', 'access_token_list')}
+                  disabled={executing}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <FileText className="w-5 h-5 text-blue-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Access Token List</h4>
+                  <p className="text-[10px] text-gray-500">Daftar token sesi aktif</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openActionModal({
+                    title: 'Extend Session Login',
+                    action: 'extend_session',
+                    category: 'tembak_paket',
+                    fields: [{ name: 'phone', label: 'Nomor HP atau Token', placeholder: '08xxxx', defaultValue: savedPhone }]
+                  })}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <RefreshCw className="w-5 h-5 text-amber-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Extend Session</h4>
+                  <p className="text-[10px] text-gray-500">Perpanjang sesi login</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('packages')}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <PackageCheck className="w-5 h-5 text-teal-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Daftar Produk</h4>
+                  <p className="text-[10px] text-gray-500">Katalog paket XL/AXIS live</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openActionModal({
+                    title: 'Cek Stok Paket',
+                    action: 'cek_stok_paket',
+                    category: 'tembak_paket',
+                    fields: [{ name: 'package_id', label: 'ID Paket (Contoh: AXIS_XCONF_5GB_7D)', placeholder: 'ID paket tembak' }]
+                  })}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <Radio className="w-5 h-5 text-cyan-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Cek Stok Paket</h4>
+                  <p className="text-[10px] text-gray-500">Ketersediaan kuota paket</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openActionModal({
+                    title: 'Cek Lokasi / Area Nomor',
+                    action: 'cek_lokasi',
+                    category: 'tembak_paket',
+                    fields: [{ name: 'access_token', label: 'Access Token XL/AXIS (dari Login OTP)', placeholder: 'Session Token', defaultValue: savedAccessToken }]
+                  })}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <MapPin className="w-5 h-5 text-rose-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Cek Lokasi / Area</h4>
+                  <p className="text-[10px] text-gray-500">Wilayah coverage nomor</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExecute('tembak_paket', 'cek_stok_akrab_circle')}
+                  disabled={executing}
+                  className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
+                >
+                  <Users className="w-5 h-5 text-purple-600 mb-1.5" />
+                  <h4 className="font-bold text-xs text-gray-900">Stok Akrab & Circle</h4>
+                  <p className="text-[10px] text-gray-500">Stok global paket akrab</p>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openActionModal({
+                  title: 'Unreg / Stop Paket Aktif',
+                  action: 'unreg_paket',
+                  category: 'tembak_paket',
+                  fields: [
+                    { name: 'access_token', label: 'Access Token XL/AXIS (dari Login OTP)', placeholder: 'Session Token', defaultValue: savedAccessToken },
+                    { name: 'encrypted_package_code', label: 'Kode Paket Terenkripsi / ID Paket', placeholder: 'ID / kode paket yang distop' }
+                  ]
+                })}
+                className="w-full py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-xs shadow-xs active:scale-98 transition-all"
+              >
+                ⛔ Unreg / Stop Paket Aktif
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 text-center">
+              <Lock className="w-8 h-8 text-amber-500 mx-auto mb-2" />
+              <p className="text-xs font-bold text-gray-800">Akses Terbatas</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Menu Tembak Paket memerlukan izin dari Admin/Owner. Silakan pilih tab Layanan atau hubungi Admin.
+              </p>
+            </div>
+          )
+        )}
+
+        {/* ─── TAB 2: LAYANAN SEMUA ROLE ───────────────────────────────── */}
         {activeTab === 'public' && (
           <div className="space-y-2.5">
             <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 p-3 rounded-2xl flex items-center justify-between">
@@ -849,149 +1071,7 @@ const KmspTools = () => {
           </div>
         )}
 
-        {/* ─── TAB 3: TEMBAK PAKET DATA XL & AXIS ───────────────────────── */}
-        {activeTab === 'tembak' && canAccessAdminTools && (
-          <div className="space-y-2.5">
-            <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 p-3 rounded-2xl flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-orange-950">Tembak Paket Data XL & AXIS</p>
-                <p className="text-[11px] text-orange-700">Otentikasi OTP, Session Token, & Injeksi Paket</p>
-              </div>
-              <span className="text-[10px] bg-orange-600 text-white px-2 py-0.5 rounded-full font-bold">
-                API v1
-              </span>
-            </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => openActionModal({
-                  title: 'Request OTP',
-                  action: 'request_otp',
-                  category: 'tembak_paket',
-                  fields: [{ name: 'phone', label: 'Nomor HP XL/AXIS', placeholder: '08xxxx', defaultValue: savedPhone }]
-                })}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <Send className="w-5 h-5 text-indigo-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Request OTP</h4>
-                <p className="text-[10px] text-gray-500">Kirim kode OTP ke nomor</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openActionModal({
-                  title: 'Login OTP (Dapatkan Token)',
-                  action: 'login_otp',
-                  category: 'tembak_paket',
-                  fields: [
-                    { name: 'phone', label: 'Nomor HP XL/AXIS', placeholder: '08xxxx', defaultValue: savedPhone },
-                    { name: 'auth_id', label: 'Auth ID (otomatis dari Request OTP)', placeholder: 'Auth ID verifikasi', defaultValue: savedAuthId },
-                    { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi' }
-                  ]
-                })}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <KeyRound className="w-5 h-5 text-emerald-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Login OTP</h4>
-                <p className="text-[10px] text-gray-500">Verifikasi & simpan token</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleExecute('tembak_paket', 'access_token_list')}
-                disabled={executing}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <FileText className="w-5 h-5 text-blue-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Access Token List</h4>
-                <p className="text-[10px] text-gray-500">Daftar token sesi aktif</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openActionModal({
-                  title: 'Extend Session Login',
-                  action: 'extend_session',
-                  category: 'tembak_paket',
-                  fields: [{ name: 'phone', label: 'Nomor HP atau Token', placeholder: '08xxxx', defaultValue: savedPhone }]
-                })}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <RefreshCw className="w-5 h-5 text-amber-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Extend Session</h4>
-                <p className="text-[10px] text-gray-500">Perpanjang sesi login</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('packages')}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <PackageCheck className="w-5 h-5 text-teal-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Daftar Produk</h4>
-                <p className="text-[10px] text-gray-500">Katalog paket XL/AXIS live</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openActionModal({
-                  title: 'Cek Stok Paket',
-                  action: 'cek_stok_paket',
-                  category: 'tembak_paket',
-                  fields: [{ name: 'package_id', label: 'ID Paket (Contoh: AXIS_XCONF_5GB_7D)', placeholder: 'ID paket tembak' }]
-                })}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <Radio className="w-5 h-5 text-cyan-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Cek Stok Paket</h4>
-                <p className="text-[10px] text-gray-500">Ketersediaan kuota paket</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => openActionModal({
-                  title: 'Cek Lokasi / Area Nomor',
-                  action: 'cek_lokasi',
-                  category: 'tembak_paket',
-                  fields: [{ name: 'access_token', label: 'Access Token XL/AXIS (dari Login OTP)', placeholder: 'Session Token', defaultValue: savedAccessToken }]
-                })}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <MapPin className="w-5 h-5 text-rose-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Cek Lokasi / Area</h4>
-                <p className="text-[10px] text-gray-500">Wilayah coverage nomor</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleExecute('tembak_paket', 'cek_stok_akrab_circle')}
-                disabled={executing}
-                className="p-3 bg-white border border-gray-200/90 rounded-2xl text-left hover:shadow-xs active:scale-98 transition-all"
-              >
-                <Users className="w-5 h-5 text-purple-600 mb-1.5" />
-                <h4 className="font-bold text-xs text-gray-900">Stok Akrab & Circle</h4>
-                <p className="text-[10px] text-gray-500">Stok global paket akrab</p>
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => openActionModal({
-                title: 'Unreg / Stop Paket Aktif',
-                action: 'unreg_paket',
-                category: 'tembak_paket',
-                fields: [
-                  { name: 'access_token', label: 'Access Token XL/AXIS (dari Login OTP)', placeholder: 'Session Token', defaultValue: savedAccessToken },
-                  { name: 'encrypted_package_code', label: 'Kode Paket Terenkripsi / ID Paket', placeholder: 'ID / kode paket yang distop' }
-                ]
-              })}
-              className="w-full py-2.5 px-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-xs shadow-xs active:scale-98 transition-all"
-            >
-              ⛔ Unreg / Stop Paket Aktif
-            </button>
-          </div>
-        )}
 
         {/* ─── TAB 4: PENGATURAN AKSES ROLE (ADMIN & OWNER) ─────────────── */}
         {activeTab === 'settings' && isPrivileged && (
