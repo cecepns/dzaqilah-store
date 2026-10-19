@@ -70,5 +70,6 @@ export const API_ENDPOINTS = {
   KMSP: {
     SETTINGS: '/kmsp/settings',
     EXECUTE: '/kmsp/execute',
+    PACKAGES: '/kmsp/packages',
   },
 };

@@ -173,7 +173,7 @@ const ApiSettings = () => {
   const handleSaveKmsp = async (e) => {
     e?.preventDefault();
     if (!serverStatus.kmsp.has_api_key && !kmspForm.api_key.trim()) {
-      toast.error('API Key KMSP wajib diisi');
+      toast.error('API Key DZ STORE wajib diisi');
       return;
     }
 
@@ -204,7 +204,7 @@ const ApiSettings = () => {
         }));
       }
 
-      toast.success('Pengaturan KMSP Store berhasil disimpan');
+      toast.success('Pengaturan DZ STORE berhasil disimpan');
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -257,7 +257,7 @@ const ApiSettings = () => {
     <div className="min-h-screen bg-gray-50 pb-20">
       <Header
         title="Kelola API & Provider"
-        subtitle="Manajemen API Key Digiflazz & KMSP (Owner Only)"
+        subtitle="Manajemen API Key Digiflazz & DZ STORE (Owner Only)"
       />
 
       <div className="max-w-mobile mx-auto px-4 pt-4 space-y-5">
@@ -466,13 +466,13 @@ const ApiSettings = () => {
               </form>
             </div>
 
-            {/* ─── KMSP Section ─── */}
+            {/* ─── DZ STORE Section ─── */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
               <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <Radio className="w-5 h-5 text-white" />
                   <div>
-                    <h2 className="text-sm font-bold leading-tight">KMSP Store API</h2>
+                    <h2 className="text-sm font-bold leading-tight">DZ STORE API</h2>
                     <p className="text-[11px] text-blue-100">AKMT & Tembak Paket Data XL / Axis</p>
                   </div>
                 </div>
@@ -480,7 +480,7 @@ const ApiSettings = () => {
                   to="/kmsp-tools"
                   className="inline-flex items-center gap-1 px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg text-[11px] font-semibold transition-colors"
                 >
-                  Buka Tools
+                  Buka Layanan DZ STORE
                   <ExternalLink className="w-3 h-3" />
                 </Link>
               </div>
@@ -489,7 +489,7 @@ const ApiSettings = () => {
                 {/* Base URL */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Base URL API KMSP
+                    Base URL API DZ STORE
                   </label>
                   <input
                     type="text"
@@ -505,7 +505,7 @@ const ApiSettings = () => {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-semibold text-gray-700">
-                      API Key KMSP <span className="text-red-500">*</span>
+                      API Key DZ STORE <span className="text-red-500">*</span>
                     </label>
                     {serverStatus.kmsp.has_api_key ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
@@ -526,8 +526,8 @@ const ApiSettings = () => {
                       onChange={(e) => setKmspForm({ ...kmspForm, api_key: e.target.value })}
                       placeholder={
                         serverStatus.kmsp.has_api_key
-                          ? 'Kosongkan jika tidak ingin mengubah API key KMSP tersimpan'
-                          : 'Masukkan API Key KMSP baru'
+                          ? 'Kosongkan jika tidak ingin mengubah API key DZ STORE tersimpan'
+                          : 'Masukkan API Key DZ STORE baru'
                       }
                       className="w-full px-3.5 py-2.5 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono placeholder:text-gray-400 placeholder:text-xs"
                     />
@@ -541,8 +541,8 @@ const ApiSettings = () => {
                   </div>
                   <p className="text-[11px] text-gray-500 mt-1">
                     {serverStatus.kmsp.has_api_key
-                      ? 'Kunci API KMSP tersimpan aman di server database. Ketik kunci baru hanya jika Anda ingin memperbarui.'
-                      : 'Didapatkan dari menu Akun > Integrasi API di portal KMSP Store.'}
+                      ? 'Kunci API DZ STORE tersimpan aman di server database. Ketik kunci baru hanya jika Anda ingin memperbarui.'
+                      : 'Kunci rahasia API provider untuk transaksi dan cek kuota/saldo.'}
                   </p>
                 </div>
 
@@ -560,7 +560,7 @@ const ApiSettings = () => {
                     <div className="text-xs">
                       <span className="font-semibold text-gray-800 block">Izinkan Role Member (Pengguna Biasa)</span>
                       <span className="text-[11px] text-gray-500 block">
-                        Jika dicentang, Member dapat melihat tab AKMT & Tembak Paket KMSP.
+                        Jika dicentang, Member dapat melihat tab AKMT & Tembak Paket DZ STORE.
                       </span>
                     </div>
                   </label>
@@ -589,7 +589,7 @@ const ApiSettings = () => {
                     className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-xs font-bold hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 shadow-xs"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    {savingKmsp ? 'Menyimpan...' : 'Simpan Kredensial KMSP'}
+                    {savingKmsp ? 'Menyimpan...' : 'Simpan Kredensial DZ STORE'}
                   </button>
                 </div>
               </form>
@@ -603,7 +603,7 @@ const ApiSettings = () => {
               </div>
               <ul className="list-disc pl-5 space-y-1 text-[11px] text-gray-600">
                 <li>
-                  <strong>Tersimpan di Server (Server-Side Secret):</strong> Kunci API hanya diproses di backend dan dienkripsi saat berkomunikasi dengan server Digiflazz dan KMSP.
+                  <strong>Tersimpan di Server (Server-Side Secret):</strong> Kunci API hanya diproses di backend dan dienkripsi saat berkomunikasi dengan server Digiflazz dan DZ STORE.
                 </li>
                 <li>
                   <strong>Masking Otomatis:</strong> Di sisi browser, kredensial disamarkan (contoh: <code>86a9••••••••b7ed</code>) sehingga tidak dapat dibaca dari inspect element atau console log.

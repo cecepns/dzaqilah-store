@@ -205,7 +205,7 @@ const Home = () => {
     { to: '/admin/logs', icon: History, label: 'Log Aktivitas', color: 'from-amber-500 to-orange-600' },
     { to: '/admin/margin', icon: Percent, label: 'Pengaturan', color: 'from-blue-500 to-cyan-600' },
     { to: '/admin/product-margins', icon: Percent, label: 'Margin Produk', color: 'from-rose-500 to-pink-600' },
-    { to: '/kmsp-tools', icon: Radio, label: 'KMSP Paket Akrab', color: 'from-cyan-600 to-blue-700' },
+    { to: '/kmsp-tools', icon: Radio, label: 'DZ Store Paket Akrab', color: 'from-cyan-600 to-blue-700' },
     ...(isOwner ? [{ to: '/admin/api-settings', icon: KeyRound, label: 'Kelola API Provider', color: 'from-violet-600 to-purple-800' }] : []),
   ];
 

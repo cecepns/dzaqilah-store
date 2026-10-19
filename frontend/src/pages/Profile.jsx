@@ -158,7 +158,7 @@ const Profile = () => {
       { icon: PlusCircle, label: 'Request Topup Saldo', to: '/request-topup' },
     ]),
     ...(isOwner ? [
-      { icon: Server, label: 'Kelola API Provider (Digiflazz & KMSP)', to: '/admin/api-settings' },
+      { icon: Server, label: 'Kelola API Provider (Digiflazz & DZ STORE)', to: '/admin/api-settings' },
     ] : []),
     { icon: Wallet, label: 'Riwayat Saldo', to: '/riwayat-saldo' },
     { icon: ChevronRight, label: 'Riwayat Transaksi', to: '/riwayat' },
