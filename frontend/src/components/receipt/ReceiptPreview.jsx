@@ -2,7 +2,7 @@ import { formatCurrency, formatDate } from '../../utils/request';
 import { getReceiptStoreName } from '../../utils/receipt';
 
 const statusLabels = { success: 'Sukses', pending: 'Pending', failed: 'Gagal' };
-const typeLabels = { prepaid: 'Prabayar', pasca: 'Pascabayar' };
+const typeLabels = { prepaid: 'Prabayar', pasca: 'Pascabayar', kmsp: 'Paket Data (DZ Store)' };
 
 const ReceiptPreview = ({ transaction, partnerName, id = 'receipt-preview' }) => {
   const storeName = getReceiptStoreName(partnerName);

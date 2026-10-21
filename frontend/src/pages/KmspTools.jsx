@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Shield,
   Smartphone,
@@ -35,7 +36,8 @@ import { get, post, put, getErrorMessage } from '../utils/request';
 import { API_ENDPOINTS } from '../utils/endpoints';
 
 const KmspTools = () => {
-  const { user, isAdmin, isOwner, isReseller } = useAuth();
+  const navigate = useNavigate();
+  const { user, isAdmin, isOwner, isReseller, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState('tembak');
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [executing, setExecuting] = useState(false);
@@ -110,10 +112,14 @@ const KmspTools = () => {
 
   const sortedPackages = useMemo(() => {
     return [...packages].sort((a, b) => {
-      const aGangguan = Boolean(a.sedang_gangguan);
-      const bGangguan = Boolean(b.sedang_gangguan);
-      if (aGangguan !== bGangguan) {
-        return aGangguan ? 1 : -1; // Ready (!sedang_gangguan) diletakkan paling atas
+      const aUnavailable = Boolean(
+        a.sedang_gangguan || a.is_out_of_stock || (a.stock !== null && a.stock !== undefined && a.stock <= 0)
+      );
+      const bUnavailable = Boolean(
+        b.sedang_gangguan || b.is_out_of_stock || (b.stock !== null && b.stock !== undefined && b.stock <= 0)
+      );
+      if (aUnavailable !== bUnavailable) {
+        return aUnavailable ? 1 : -1; // Ready diletakkan paling atas
       }
       return 0;
     });
@@ -185,6 +191,9 @@ const KmspTools = () => {
 
       if (res.success !== false) {
         toast.success(res.message || 'Aksi berhasil dieksekusi');
+        if (action.includes('purchase') || action.includes('beli_paket')) {
+          refreshProfile?.();
+        }
       } else {
         toast.error(res.message || 'Gagal memproses aksi');
       }
@@ -319,7 +328,7 @@ const KmspTools = () => {
                       category: 'public',
                       fields: [
                         { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
-                        { name: 'package_id', label: 'Kode Paket (Contoh: SXLEDU15GB7D_PREV)', placeholder: 'Masukkan kode paket' },
+                        { name: 'package_code', label: 'Kode Paket (Contoh: SXLEDU15GB7D_PREV)', placeholder: 'Masukkan kode paket' },
                       ]
                     })}
                     className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs active:scale-95 transition-all"
@@ -349,7 +358,7 @@ const KmspTools = () => {
                       category: 'public',
                       fields: [
                         { name: 'phone', label: 'Nomor HP Tujuan', placeholder: '08xxxx', defaultValue: savedPhone },
-                        { name: 'package_id', label: 'ID Paket / Service Code', placeholder: 'Masukkan ID paket' },
+                        { name: 'package_code', label: 'Kode Paket / Service Code', placeholder: 'Masukkan kode paket' },
                         { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi SMS' },
                         { name: 'access_token', label: 'Access Token (Opsional jika sudah login)', placeholder: 'Session Token', defaultValue: savedAccessToken },
                       ]
@@ -949,155 +958,176 @@ const KmspTools = () => {
                   </span>
                 </div>
 
-                {sortedPackages.map((pkg) => (
-                  <div
-                    key={pkg.package_code}
-                    className={`bg-white p-3.5 rounded-2xl border shadow-xs transition-all space-y-2.5 ${
-                      pkg.sedang_gangguan
-                        ? 'border-red-200 bg-red-50/15'
-                        : 'border-gray-200/90 hover:border-teal-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {!pkg.sedang_gangguan ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Ready
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-md">
-                              <AlertCircle className="w-3 h-3 text-red-600" /> Gangguan
-                            </span>
-                          )}
+                {sortedPackages.map((pkg) => {
+                  const isOutOfStock = Boolean(
+                    pkg.is_out_of_stock || (pkg.stock !== null && pkg.stock !== undefined && pkg.stock <= 0)
+                  );
+                  const isUnavailable = Boolean(pkg.sedang_gangguan || isOutOfStock);
 
-                          {pkg.no_need_login ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-md">
-                              <Unlock className="w-3 h-3" /> NO OTP
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
-                              <Lock className="w-3 h-3" /> Butuh OTP
-                            </span>
-                          )}
+                  return (
+                    <div
+                      key={pkg.package_code}
+                      className={`p-3.5 rounded-2xl border transition-all space-y-2.5 ${
+                        isUnavailable
+                          ? 'border-gray-200/60 bg-gray-50/80 opacity-60 grayscale-[15%]'
+                          : 'bg-white border-gray-200/90 hover:border-teal-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {pkg.sedang_gangguan ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                                <AlertCircle className="w-3 h-3 text-amber-600" /> Gangguan
+                              </span>
+                            ) : isOutOfStock ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 px-1.5 py-0.5 rounded-md">
+                                <AlertCircle className="w-3 h-3 text-red-600" /> Stok Habis
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                {pkg.stock !== null && pkg.stock !== undefined ? `Stok: ${pkg.stock}` : 'Ready'}
+                              </span>
+                            )}
 
-                          {(pkg.is_akrab || pkg.is_circle || (pkg.package_name && pkg.package_name.toLowerCase().includes('akrab')) || (pkg.package_code && pkg.package_code.toLowerCase().includes('akrab'))) && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-md">
-                              <Users className="w-3 h-3" /> Akrab
-                            </span>
-                          )}
-                        </div>
+                            {pkg.no_need_login ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-md">
+                                <Unlock className="w-3 h-3" /> NO OTP
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                                <Lock className="w-3 h-3" /> Butuh OTP
+                              </span>
+                            )}
 
-                        <h4 className="font-bold text-xs text-gray-900 leading-snug break-words">
-                          {pkg.package_name}
-                        </h4>
-
-                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-mono">
-                          <span>{pkg.package_code}</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(pkg.package_code);
-                              toast.success('Kode paket disalin!');
-                            }}
-                            className="hover:text-gray-900"
-                            title="Salin kode"
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="text-right flex-shrink-0">
-                        <span className="text-xs font-black text-teal-700 bg-teal-50 px-2.5 py-1 rounded-xl border border-teal-200 block">
-                          Rp {Number(pkg.price || pkg.selling_price || pkg.package_harga_int || 0).toLocaleString('id-ID')}
-                        </span>
-                        {isPrivileged && pkg.original_price > 0 && (
-                          <div className="text-[10px] text-gray-500 mt-1 flex flex-col items-end">
-                            <span>Modal: Rp {Number(pkg.original_price).toLocaleString('id-ID')}</span>
-                            <span className="text-purple-700 font-semibold">Margin {pkg.margin_percent}%</span>
+                            {(pkg.is_akrab || pkg.is_circle || (pkg.package_name && pkg.package_name.toLowerCase().includes('akrab')) || (pkg.package_code && pkg.package_code.toLowerCase().includes('akrab'))) && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded-md">
+                                <Users className="w-3 h-3" /> Akrab
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Description Expander */}
-                    {pkg.package_description && (
-                      <div className="text-[11px] text-gray-600 bg-gray-50 p-2 rounded-xl border border-gray-100">
-                        {expandedPackage === pkg.package_code ? (
-                          <div className="space-y-1">
-                            <pre className="font-sans whitespace-pre-wrap leading-relaxed text-gray-700">{pkg.package_description}</pre>
+                          <h4 className="font-bold text-xs text-gray-900 leading-snug break-words">
+                            {pkg.package_name}
+                          </h4>
+
+                          <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-mono">
+                            <span>{pkg.package_code}</span>
                             <button
                               type="button"
-                              onClick={() => setExpandedPackage(null)}
-                              className="text-teal-700 text-[10px] font-bold hover:underline"
+                              onClick={() => {
+                                navigator.clipboard.writeText(pkg.package_code);
+                                toast.success('Kode paket disalin!');
+                              }}
+                              className="hover:text-gray-900"
+                              title="Salin kode"
                             >
-                              Tutup detail
+                              <Copy className="w-3 h-3" />
                             </button>
                           </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <p className="line-clamp-1 flex-1 text-gray-500 mr-2">{pkg.package_description.replace(/\r?\n/g, ' ')}</p>
-                            <button
-                              type="button"
-                              onClick={() => setExpandedPackage(pkg.package_code)}
-                              className="text-teal-700 text-[10px] font-bold hover:underline flex-shrink-0"
-                            >
-                              Lihat detail
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
 
-                    {/* Action Buy Button */}
-                    <div className="pt-1 flex items-center justify-end">
-                      <button
-                        type="button"
-                        disabled={pkg.sedang_gangguan}
-                        onClick={() => {
-                          const modalData = {
-                            packageName: pkg.package_name,
-                            price: pkg.price || pkg.selling_price,
-                          };
-                          if (pkg.no_need_login) {
-                            openActionModal({
-                              ...modalData,
-                              title: `Beli Paket NO OTP`,
-                              action: 'beli_paket_no_otp',
-                              category: 'public',
-                              fields: [
-                                { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
-                                { name: 'package_id', label: 'Kode Paket Terpilih', defaultValue: pkg.package_code, readOnly: true },
-                              ],
-                            });
-                          } else {
-                            openActionModal({
-                              ...modalData,
-                              title: `Beli Paket dengan OTP`,
-                              action: 'beli_paket_otp',
-                              category: 'public',
-                              fields: [
-                                { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
-                                { name: 'package_id', label: 'Kode Paket Terpilih', defaultValue: pkg.package_code, readOnly: true },
-                                { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi' },
-                                { name: 'access_token', label: 'Access Token (Opsional jika sudah Login OTP)', defaultValue: savedAccessToken },
-                              ],
-                            });
-                          }
-                        }}
-                        className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs ${
-                          pkg.sedang_gangguan
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                            : 'bg-teal-700 hover:bg-teal-800 text-white active:scale-95'
-                        }`}
-                      >
-                        <ShoppingCart className="w-3.5 h-3.5" />
-                        {pkg.sedang_gangguan ? 'Sedang Gangguan' : 'Beli Sekarang'}
-                      </button>
+                        <div className="text-right flex-shrink-0">
+                          <span className={`text-xs font-black px-2.5 py-1 rounded-xl border block ${
+                            isUnavailable
+                              ? 'text-gray-400 bg-gray-100 border-gray-200'
+                              : 'text-teal-700 bg-teal-50 border-teal-200'
+                          }`}>
+                            Rp {Number(pkg.price || pkg.selling_price || pkg.package_harga_int || 0).toLocaleString('id-ID')}
+                          </span>
+                          {isPrivileged && pkg.original_price > 0 && (
+                            <div className="text-[10px] text-gray-500 mt-1 flex flex-col items-end">
+                              <span>Modal: Rp {Number(pkg.original_price).toLocaleString('id-ID')}</span>
+                              <span className="text-purple-700 font-semibold">Margin {pkg.margin_percent}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Description Expander */}
+                      {pkg.package_description && (
+                        <div className="text-[11px] text-gray-600 bg-gray-50 p-2 rounded-xl border border-gray-100">
+                          {expandedPackage === pkg.package_code ? (
+                            <div className="space-y-1">
+                              <pre className="font-sans whitespace-pre-wrap leading-relaxed text-gray-700">{pkg.package_description}</pre>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedPackage(null)}
+                                className="text-teal-700 text-[10px] font-bold hover:underline"
+                              >
+                                Tutup detail
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <p className="line-clamp-1 flex-1 text-gray-500 mr-2">{pkg.package_description.replace(/\r?\n/g, ' ')}</p>
+                              <button
+                                type="button"
+                                onClick={() => setExpandedPackage(pkg.package_code)}
+                                className="text-teal-700 text-[10px] font-bold hover:underline flex-shrink-0"
+                              >
+                                Lihat detail
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action Buy Button */}
+                      <div className="pt-1 flex items-center justify-end">
+                        <button
+                          type="button"
+                          disabled={isUnavailable}
+                          onClick={() => {
+                            const modalData = {
+                              packageName: pkg.package_name,
+                              packageCode: pkg.package_code,
+                              price: pkg.price || pkg.selling_price,
+                            };
+                            if (pkg.no_need_login) {
+                              openActionModal({
+                                ...modalData,
+                                title: `Beli Paket NO OTP`,
+                                action: 'beli_paket_no_otp',
+                                category: 'public',
+                                fields: [
+                                  { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
+                                  { name: 'package_code', label: 'Kode Paket Terpilih', defaultValue: pkg.package_code, readOnly: true },
+                                ],
+                              });
+                            } else {
+                              openActionModal({
+                                ...modalData,
+                                title: `Beli Paket dengan OTP`,
+                                action: 'beli_paket_otp',
+                                category: 'public',
+                                fields: [
+                                  { name: 'phone', label: 'Nomor HP Tujuan (XL/AXIS)', placeholder: '08xxxx', defaultValue: savedPhone },
+                                  { name: 'package_code', label: 'Kode Paket Terpilih', defaultValue: pkg.package_code, readOnly: true },
+                                  { name: 'otp', label: 'Kode OTP (SMS)', placeholder: 'Kode verifikasi' },
+                                  { name: 'access_token', label: 'Access Token (Opsional jika sudah Login OTP)', defaultValue: savedAccessToken },
+                                ],
+                              });
+                            }
+                          }}
+                          className={`px-3.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs ${
+                            isUnavailable
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200 shadow-none'
+                              : 'bg-teal-700 hover:bg-teal-800 text-white active:scale-95'
+                          }`}
+                        >
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          {pkg.sedang_gangguan
+                            ? 'Sedang Gangguan'
+                            : isOutOfStock
+                            ? 'Stok Habis'
+                            : 'Beli Sekarang'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1364,7 +1394,13 @@ const KmspTools = () => {
           onSubmit={(e) => {
             e.preventDefault();
             if (activeActionModal) {
-              handleExecute(activeActionModal.category, activeActionModal.action, formData);
+              const combinedData = {
+                ...formData,
+                ...(activeActionModal.packageCode ? { package_code: activeActionModal.packageCode } : {}),
+                ...(activeActionModal.packageName ? { packageName: activeActionModal.packageName } : {}),
+                ...(activeActionModal.price ? { price: activeActionModal.price } : {}),
+              };
+              handleExecute(activeActionModal.category, activeActionModal.action, combinedData);
             }
           }}
           className="space-y-3"
@@ -1431,6 +1467,47 @@ const KmspTools = () => {
             {resultModal.isSuccess ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
             <p className="text-xs font-semibold leading-relaxed">{resultModal.message}</p>
           </div>
+
+          {/* Quick Helper: Transaksi Pembelian Paket Tercatat */}
+          {resultModal.data?.trx_id && (
+            <div className="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 p-3 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider">Transaksi Tercatat (KMSP)</span>
+                <span className="text-[10px] bg-teal-600 text-white px-2 py-0.5 rounded font-bold">
+                  {resultModal.data.status === 'success' || resultModal.data.status === 1 ? 'Sukses' : 'Pending'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 bg-white/80 p-2 rounded-lg border border-teal-100">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-gray-500 font-medium">ID Transaksi / Ref ID</p>
+                  <p className="text-xs font-mono font-bold text-teal-950 truncate">{resultModal.data.trx_id}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(resultModal.data.trx_id);
+                    toast.success('ID Transaksi disalin!');
+                  }}
+                  className="px-2 py-1 bg-teal-100 hover:bg-teal-200 text-teal-800 text-[10px] font-bold rounded flex items-center gap-1 shrink-0"
+                >
+                  <Copy className="w-3 h-3" /> Salin
+                </button>
+              </div>
+              <p className="text-[11px] text-teal-900 leading-relaxed">
+                Transaksi ini telah otomatis tercatat di <strong>Riwayat Transaksi</strong> akun Anda. Jika transaksi masih pending, Anda dapat menekan tombol <strong>Cek Status</strong> di riwayat transaksi untuk sinkronisasi.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setResultModal((p) => ({ ...p, isOpen: false }));
+                  navigate('/transactions');
+                }}
+                className="w-full py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <FileText className="w-3.5 h-3.5" /> Buka Riwayat Transaksi →
+              </button>
+            </div>
+          )}
 
           {/* Quick Helper: Auth ID from Request OTP */}
           {resultModal.action === 'request_otp' && resultModal.data?.auth_id && (

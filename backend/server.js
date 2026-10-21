@@ -620,6 +620,9 @@ const mapKmspPackage = (p, marginsMap = productMargins, role = 'user') => {
     custom_reseller_margin_percent: custom ? custom.reseller_margin_percent : null,
     has_custom_margin: hasCustomMargin,
     transaction_type: 'kmsp',
+    stock: p.stock !== undefined ? p.stock : null,
+    is_out_of_stock: Boolean(p.is_out_of_stock),
+    sedang_gangguan: Boolean(p.sedang_gangguan),
   };
 };
 
@@ -718,6 +721,59 @@ const applyTransactionStatusUpdate = async (connection, transaction, digiflazzDa
   return { oldStatus, newStatus, sn, message, refunded, balanceAfter };
 };
 
+const mapKmspStatus = (kmspStatus) => {
+  const s = Number(kmspStatus);
+  if (s === 1) return 'success';
+  if (s === 2) return 'pending';
+  if (s === 0) return 'failed';
+  return 'pending';
+};
+
+const applyKmspTransactionStatusUpdate = async (connection, transaction, kmspData, fullResponse = null) => {
+  const newStatus = mapKmspStatus(kmspData.status);
+  const oldStatus = transaction.status;
+  const sn = kmspData.sn_only || kmspData.sn_and_info || transaction.sn || kmspData.trx_id || null;
+  const message = kmspData.rc_message || kmspData.message || transaction.message || null;
+  const responseJson = JSON.stringify(fullResponse || kmspData);
+
+  await connection.execute(
+    `UPDATE transactions SET status = ?, sn = ?, message = ?, digiflazz_response = ?, updated_at = NOW() WHERE id = ?`,
+    [newStatus, sn, message, responseJson, transaction.id]
+  );
+
+  let refunded = false;
+  let balanceAfter = null;
+
+  if (oldStatus === 'pending' && newStatus === 'failed') {
+    const alreadyRefunded = await hasRefundForTransaction(connection, transaction);
+    if (!alreadyRefunded) {
+      const [users] = await connection.execute('SELECT * FROM users WHERE id = ? FOR UPDATE', [transaction.user_id]);
+      if (users.length) {
+        const balanceBefore = parseFloat(users[0].balance);
+        const refundAmount = parseFloat(transaction.selling_price);
+        balanceAfter = balanceBefore + refundAmount;
+
+        await connection.execute('UPDATE users SET balance = ? WHERE id = ?', [balanceAfter, transaction.user_id]);
+        await connection.execute(
+          'INSERT INTO balance_transactions (user_id, type, amount, balance_before, balance_after, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            transaction.user_id,
+            'refund',
+            refundAmount,
+            balanceBefore,
+            balanceAfter,
+            `Refund transaksi gagal KMSP ${transaction.ref_id}`,
+            null,
+          ]
+        );
+        refunded = true;
+      }
+    }
+  }
+
+  return { oldStatus, newStatus, sn, message, refunded, balanceAfter };
+};
+
 // ─── Auth Middleware ───────────────────────────────────────────────────────
 
 const authenticate = async (req, res, next) => {
@@ -804,6 +860,7 @@ const initDatabase = async () => {
         product_name VARCHAR(200) NOT NULL,
         category VARCHAR(100),
         brand VARCHAR(100),
+        transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid',
         price DECIMAL(15, 2) NOT NULL,
         selling_price DECIMAL(15, 2) NOT NULL,
         status ENUM('success', 'pending', 'failed') NOT NULL DEFAULT 'pending',
@@ -918,10 +975,18 @@ const initDatabase = async () => {
 
     try {
       await connection.query(
-        `ALTER TABLE transactions ADD COLUMN transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid' AFTER brand`
+        `ALTER TABLE transactions ADD COLUMN transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid' AFTER brand`
       );
     } catch (err) {
       if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+    }
+
+    try {
+      await connection.query(
+        `ALTER TABLE transactions MODIFY COLUMN transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid'`
+      );
+    } catch (err) {
+      console.error('Failed to modify transactions transaction_type column:', err.message);
     }
 
     try {
@@ -2466,6 +2531,72 @@ app.post('/api/transactions/:id/check-status', authenticate, async (req, res) =>
     if (transaction.status !== 'pending') {
       return res.status(400).json({ success: false, message: 'Hanya transaksi pending yang bisa dicek ulang' });
     }
+
+    const isKmsp = transaction.transaction_type === 'kmsp';
+    if (isKmsp) {
+      const kmspResult = await callKmspEndpoint('check_transaction', { trx_id: transaction.ref_id });
+      const kmspData = kmspResult?.data;
+      if (!kmspData || (Array.isArray(kmspData) && kmspData.length === 0)) {
+        return res.status(502).json({
+          success: false,
+          message: kmspResult?.message || 'Gagal memeriksa status ke KMSP',
+        });
+      }
+
+      await connection.beginTransaction();
+      const [locked] = await connection.execute('SELECT * FROM transactions WHERE id = ? FOR UPDATE', [transaction.id]);
+      const current = locked[0];
+
+      if (current.status !== 'pending') {
+        await connection.commit();
+        return res.json({
+          success: true,
+          message: 'Status transaksi sudah selesai',
+          data: { status: current.status, sn: current.sn, message: current.message },
+        });
+      }
+
+      const result = await applyKmspTransactionStatusUpdate(connection, current, kmspData, kmspResult.raw || kmspResult);
+      await connection.commit();
+
+      if (result.refunded) {
+        await logActivity(
+          current.user_id,
+          'transaction_refund',
+          `Refund otomatis transaksi gagal KMSP ${current.ref_id}`,
+          { refId: current.ref_id, amount: current.selling_price },
+          req.ip
+        );
+      }
+      if (result.oldStatus !== result.newStatus) {
+        await logActivity(
+          current.user_id,
+          'transaction_status_update',
+          `Status transaksi KMSP ${current.ref_id}: ${result.oldStatus} → ${result.newStatus}`,
+          { refId: current.ref_id, source: 'check_status' },
+          req.ip
+        );
+      }
+
+      const statusMessages = {
+        success: 'Transaksi berhasil',
+        pending: 'Transaksi masih diproses di KMSP',
+        failed: result.refunded ? 'Transaksi gagal, saldo telah dikembalikan' : 'Transaksi gagal',
+      };
+
+      return res.json({
+        success: true,
+        message: statusMessages[result.newStatus] || 'Status diperbarui',
+        data: {
+          status: result.newStatus,
+          sn: result.sn,
+          message: result.message,
+          refunded: result.refunded,
+          balance_after: result.balanceAfter,
+        },
+      });
+    }
+
     if (!DIGIFLAZZ_USERNAME || !DIGIFLAZZ_API_KEY) {
       return res.status(503).json({ success: false, message: 'Digiflazz API belum dikonfigurasi' });
     }
@@ -3857,32 +3988,81 @@ const callKmspEndpoint = async (action, rawParams = {}, payload = null) => {
 let kmspPackagesCache = {
   timestamp: 0,
   data: [],
+  stockMap: new Map(),
   announcements: [],
   data_updated_at: '',
+};
+
+const fetchAndCacheKmspPackages = async (force = false) => {
+  const now = Date.now();
+  const isExpired = now - kmspPackagesCache.timestamp > 3 * 60 * 1000; // 3 menit cache
+
+  if (force || isExpired || kmspPackagesCache.data.length === 0) {
+    const [kmspResult, stockResult] = await Promise.all([
+      callKmspEndpoint('packagelist'),
+      callKmspEndpoint('stock_akrab_circle'),
+    ]);
+
+    if (kmspResult.ok && Array.isArray(kmspResult.data)) {
+      const stockMap = new Map();
+      if (stockResult.ok && Array.isArray(stockResult.data)) {
+        for (const item of stockResult.data) {
+          if (item.code) {
+            stockMap.set(String(item.code).toUpperCase().trim(), Number(item.stok ?? 0));
+          }
+        }
+      }
+
+      const enriched = kmspResult.data.map((p) => {
+        const codeUpper = String(p.package_code || '').toUpperCase().trim();
+        let stock = null;
+        let isOutOfStock = false;
+
+        if (stockMap.has(codeUpper)) {
+          stock = stockMap.get(codeUpper);
+          if (stock <= 0) {
+            isOutOfStock = true;
+          }
+        }
+
+        if (p.sedang_gangguan) {
+          isOutOfStock = true;
+        }
+
+        if (p.have_daily_limit && p.daily_limit_details) {
+          const maxLim = Number(p.daily_limit_details.max_daily_transaction_limit || 0);
+          const curCount = Number(p.daily_limit_details.current_daily_transaction_count || 0);
+          if (maxLim > 0 && curCount >= maxLim) {
+            isOutOfStock = true;
+          }
+        }
+
+        return {
+          ...p,
+          stock,
+          is_out_of_stock: isOutOfStock,
+        };
+      });
+
+      kmspPackagesCache = {
+        timestamp: now,
+        data: enriched,
+        stockMap,
+        announcements: kmspResult.raw?.announcements || [],
+        data_updated_at: kmspResult.raw?.data_updated_at || '',
+      };
+    } else if (kmspPackagesCache.data.length === 0) {
+      throw new Error(kmspResult.message || 'Gagal memuat katalog produk KMSP');
+    }
+  }
+
+  return kmspPackagesCache;
 };
 
 app.get('/api/kmsp/packages', authenticate, async (req, res) => {
   try {
     const { search, brand, type, force_refresh } = req.query;
-    const now = Date.now();
-    const isExpired = now - kmspPackagesCache.timestamp > 3 * 60 * 1000; // 3 menit cache
-
-    if (force_refresh === 'true' || isExpired || kmspPackagesCache.data.length === 0) {
-      const kmspResult = await callKmspEndpoint('packagelist');
-      if (kmspResult.ok && Array.isArray(kmspResult.data)) {
-        kmspPackagesCache = {
-          timestamp: now,
-          data: kmspResult.data,
-          announcements: kmspResult.raw?.announcements || [],
-          data_updated_at: kmspResult.raw?.data_updated_at || '',
-        };
-      } else if (kmspPackagesCache.data.length === 0) {
-        return res.status(502).json({
-          success: false,
-          message: kmspResult.message || 'Gagal memuat katalog produk KMSP',
-        });
-      }
-    }
+    await fetchAndCacheKmspPackages(force_refresh === 'true');
 
     let filtered = [...kmspPackagesCache.data];
 
@@ -3924,10 +4104,10 @@ app.get('/api/kmsp/packages', authenticate, async (req, res) => {
 
     // Sort ready packages at the top
     mapped.sort((a, b) => {
-      const aGangguan = Boolean(a.sedang_gangguan);
-      const bGangguan = Boolean(b.sedang_gangguan);
-      if (aGangguan !== bGangguan) {
-        return aGangguan ? 1 : -1;
+      const aUnavailable = Boolean(a.sedang_gangguan || a.is_out_of_stock || (a.stock !== null && a.stock !== undefined && a.stock <= 0));
+      const bUnavailable = Boolean(b.sedang_gangguan || b.is_out_of_stock || (b.stock !== null && b.stock !== undefined && b.stock <= 0));
+      if (aUnavailable !== bUnavailable) {
+        return aUnavailable ? 1 : -1;
       }
       return 0;
     });
@@ -3954,21 +4134,8 @@ app.get('/api/kmsp/packages', authenticate, async (req, res) => {
 
 app.get('/api/products/kmsp', authenticate, async (req, res) => {
   try {
-    const { search, brand, type } = req.query;
-    const now = Date.now();
-    const isExpired = now - kmspPackagesCache.timestamp > 3 * 60 * 1000;
-
-    if (isExpired || kmspPackagesCache.data.length === 0) {
-      const kmspResult = await callKmspEndpoint('packagelist');
-      if (kmspResult.ok && Array.isArray(kmspResult.data)) {
-        kmspPackagesCache = {
-          timestamp: now,
-          data: kmspResult.data,
-          announcements: kmspResult.raw?.announcements || [],
-          data_updated_at: kmspResult.raw?.data_updated_at || '',
-        };
-      }
-    }
+    const { search, brand, type, force_refresh } = req.query;
+    await fetchAndCacheKmspPackages(force_refresh === 'true');
 
     const marginsMap = await fetchProductMarginsMap();
     let data = kmspPackagesCache.data.map((p) => mapKmspPackage(p, marginsMap, req.user.role));
@@ -4002,10 +4169,10 @@ app.get('/api/products/kmsp', authenticate, async (req, res) => {
 
     // Sort ready packages at the top
     data.sort((a, b) => {
-      const aGangguan = Boolean(a.sedang_gangguan);
-      const bGangguan = Boolean(b.sedang_gangguan);
-      if (aGangguan !== bGangguan) {
-        return aGangguan ? 1 : -1;
+      const aUnavailable = Boolean(a.sedang_gangguan || a.is_out_of_stock || (a.stock !== null && a.stock !== undefined && a.stock <= 0));
+      const bUnavailable = Boolean(b.sedang_gangguan || b.is_out_of_stock || (b.stock !== null && b.stock !== undefined && b.stock <= 0));
+      if (aUnavailable !== bUnavailable) {
+        return aUnavailable ? 1 : -1;
       }
       return 0;
     });
@@ -4121,8 +4288,206 @@ app.post('/api/kmsp/execute', authenticate, async (req, res) => {
       });
     }
 
-    // Call KMSP endpoint
+    const isPurchaseAction =
+      action === 'beli_paket' ||
+      action === 'beli_paket_no_otp' ||
+      action === 'beli_paket_otp' ||
+      action === 'package_purchase';
+
+    // ─── SPECIAL HANDLING: Pembelian Paket KMSP ───
+    if (isPurchaseAction) {
+      const phone = String(params.phone || params.msisdn || params.customer_no || '').trim();
+      const packageCode = String(params.package_code || params.package_id || params.code || '').trim();
+
+      if (!phone) {
+        return res.status(400).json({ success: false, message: 'Nomor HP tujuan wajib diisi' });
+      }
+      if (!packageCode) {
+        return res.status(400).json({ success: false, message: 'Kode paket wajib dipilih' });
+      }
+
+      // Ensure cache is populated
+      await fetchAndCacheKmspPackages();
+      const pkg = kmspPackagesCache.data.find(
+        (p) => String(p.package_code || '').toLowerCase() === packageCode.toLowerCase()
+      );
+
+      // Check disturbance or stock empty
+      if (pkg) {
+        if (pkg.sedang_gangguan) {
+          return res.status(400).json({
+            success: false,
+            message: 'Paket ini sedang mengalami gangguan di provider. Silakan pilih paket lain.',
+          });
+        }
+        if (pkg.is_out_of_stock || (pkg.stock !== null && pkg.stock !== undefined && pkg.stock <= 0)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Stok paket ini sedang kosong/habis di KMSP. Silakan pilih paket lain.',
+          });
+        }
+      }
+
+      // Calculate selling price
+      const marginsMap = await fetchProductMarginsMap();
+      const originalPrice = pkg
+        ? parseFloat(pkg.package_harga_int ?? pkg.package_price ?? 0)
+        : parseFloat(params.price) || 0;
+      const sellingPrice = pkg
+        ? calcSellingPrice(originalPrice, pkg.package_code, req.user.role, marginsMap)
+        : parseFloat(params.price) || originalPrice;
+      const productName = pkg?.package_name || params.packageName || params.package_name || packageCode;
+      const brand = pkg?.brand || (packageCode.toLowerCase().includes('axis') ? 'AXIS' : 'XL');
+
+      // Check balance and begin database transaction
+      const connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      try {
+        const [userRows] = await connection.execute('SELECT * FROM users WHERE id = ? FOR UPDATE', [req.user.id]);
+        if (!userRows.length) {
+          await connection.rollback();
+          connection.release();
+          return res.status(404).json({ success: false, message: 'Pengguna tidak ditemukan' });
+        }
+
+        const balanceBefore = parseFloat(userRows[0].balance);
+        if (balanceBefore < sellingPrice) {
+          await connection.rollback();
+          connection.release();
+          return res.status(400).json({
+            success: false,
+            message: `Saldo Anda tidak mencukupi (Saldo: Rp ${balanceBefore.toLocaleString('id-ID')}, Dibutuhkan: Rp ${sellingPrice.toLocaleString('id-ID')})`,
+          });
+        }
+
+        // Call KMSP endpoint
+        const purchaseParams = {
+          ...params,
+          phone,
+          package_code: packageCode,
+          payment_method: 'BALANCE',
+        };
+        delete purchaseParams.package_id; // prevent duplicate/ambiguity
+
+        const kmspResult = await callKmspEndpoint(action, purchaseParams, payload);
+
+        if (!kmspResult.ok) {
+          await connection.rollback();
+          connection.release();
+
+          await logActivity(
+            req.user.id,
+            `kmsp_${action}_failed`,
+            `Gagal beli paket KMSP ${productName} ke ${phone}: ${kmspResult.message}`,
+            { params: purchaseParams, result_status: kmspResult.status },
+            req.ip
+          );
+
+          return res.status(400).json({
+            success: false,
+            message: kmspResult.message || 'Gagal memproses pembelian di KMSP',
+            data: kmspResult.data,
+          });
+        }
+
+        // KMSP purchase accepted (pending or success)
+        const balanceAfter = balanceBefore - sellingPrice;
+        await connection.execute('UPDATE users SET balance = ? WHERE id = ?', [balanceAfter, req.user.id]);
+        await connection.execute(
+          'INSERT INTO balance_transactions (user_id, type, amount, balance_before, balance_after, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            req.user.id,
+            'purchase',
+            sellingPrice,
+            balanceBefore,
+            balanceAfter,
+            `Pembelian ${productName} - ${phone}`,
+            req.user.id,
+          ]
+        );
+
+        const trxId = kmspResult.data?.trx_id || generateRefId();
+        const initialStatus = kmspResult.data?.status === 1 ? 'success' : 'pending';
+        const sn = kmspResult.data?.sn_only || kmspResult.data?.trx_id || null;
+        const msg = kmspResult.message || 'Transaksi berhasil diajukan ke KMSP';
+
+        await connection.execute(
+          `INSERT INTO transactions (user_id, ref_id, customer_no, buyer_sku_code, product_name, category, brand, transaction_type, price, selling_price, status, sn, message, digiflazz_response)
+           VALUES (?, ?, ?, ?, ?, 'Paket Data', ?, 'kmsp', ?, ?, ?, ?, ?, ?)`,
+          [
+            req.user.id,
+            trxId,
+            phone,
+            packageCode,
+            productName,
+            brand,
+            originalPrice,
+            sellingPrice,
+            initialStatus,
+            sn,
+            msg,
+            JSON.stringify(kmspResult.raw || kmspResult.data || {}),
+          ]
+        );
+
+        await connection.commit();
+        connection.release();
+
+        await logActivity(
+          req.user.id,
+          'transaction_kmsp',
+          `Beli paket KMSP ${productName} ke ${phone} - Rp ${sellingPrice.toLocaleString('id-ID')}`,
+          { refId: trxId, status: initialStatus },
+          req.ip
+        );
+
+        return res.json({
+          success: true,
+          message: kmspResult.message || 'Transaksi pembelian paket KMSP berhasil diajukan',
+          data: {
+            ...sanitizeSensitiveObject(kmspResult.data),
+            ref_id: trxId,
+            status: initialStatus,
+            selling_price: sellingPrice,
+            balance_after: balanceAfter,
+          },
+        });
+      } catch (err) {
+        await connection.rollback();
+        connection.release();
+        throw err;
+      }
+    }
+
+    // Call standard KMSP endpoint
     const kmspResult = await callKmspEndpoint(action, params, payload);
+
+    // If check_transaction was executed, synchronize with transactions table if ref_id matches
+    const isCheckAction = action === 'check_transaction' || action === 'cek_status_transaksi';
+    if (isCheckAction && kmspResult.ok && kmspResult.data) {
+      const trxId = String(params.trx_id || params.transaction_id || params.ref_id || '').trim();
+      if (trxId) {
+        try {
+          const conn = await pool.getConnection();
+          try {
+            const [txRows] = await conn.execute('SELECT * FROM transactions WHERE ref_id = ?', [trxId]);
+            if (txRows.length) {
+              await conn.beginTransaction();
+              const [locked] = await conn.execute('SELECT * FROM transactions WHERE id = ? FOR UPDATE', [txRows[0].id]);
+              if (locked.length && locked[0].status === 'pending') {
+                await applyKmspTransactionStatusUpdate(conn, locked[0], kmspResult.data, kmspResult.raw);
+              }
+              await conn.commit();
+            }
+          } finally {
+            conn.release();
+          }
+        } catch (dbErr) {
+          console.error('Error syncing KMSP check_transaction to local DB:', dbErr.message);
+        }
+      }
+    }
 
     // Activity log
     await logActivity(

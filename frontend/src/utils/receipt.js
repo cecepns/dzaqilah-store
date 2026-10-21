@@ -1,7 +1,7 @@
 import { formatCurrency, formatDate } from './request';
 
 const statusLabels = { success: 'Sukses', pending: 'Pending', failed: 'Gagal' };
-const typeLabels = { prepaid: 'Prabayar', pasca: 'Pascabayar' };
+const typeLabels = { prepaid: 'Prabayar', pasca: 'Pascabayar', kmsp: 'Paket Data (DZ Store)' };
 
 const divider = '================================';
 const line = '--------------------------------';

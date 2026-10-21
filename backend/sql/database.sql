@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   product_name VARCHAR(200) NOT NULL,
   category VARCHAR(100),
   brand VARCHAR(100),
-  transaction_type ENUM('prepaid', 'pasca') NOT NULL DEFAULT 'prepaid',
+  transaction_type VARCHAR(20) NOT NULL DEFAULT 'prepaid',
   price DECIMAL(15, 2) NOT NULL,
   selling_price DECIMAL(15, 2) NOT NULL,
   status ENUM('success', 'pending', 'failed') NOT NULL DEFAULT 'pending',
