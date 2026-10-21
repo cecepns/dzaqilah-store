@@ -722,19 +722,120 @@ const applyTransactionStatusUpdate = async (connection, transaction, digiflazzDa
 };
 
 const mapKmspStatus = (kmspStatus) => {
-  const s = Number(kmspStatus);
-  if (s === 1) return 'success';
-  if (s === 2) return 'pending';
-  if (s === 0) return 'failed';
+  if (kmspStatus === null || kmspStatus === undefined) return 'pending';
+  const str = String(kmspStatus).toLowerCase().trim();
+  if (str === '1' || str === 'success' || str === 'sukses' || str === 'berhasil') return 'success';
+  if (str === '0' || str === 'failed' || str === 'gagal' || str === 'batal' || str === 'error') return 'failed';
+  if (str === '2' || str === 'pending' || str === 'proses' || str === 'processing') return 'pending';
+  const num = Number(kmspStatus);
+  if (num === 1) return 'success';
+  if (num === 0) return 'failed';
+  if (num === 2) return 'pending';
   return 'pending';
+};
+
+const parseKmspPayload = (req) => {
+  let body = req.body || {};
+  let query = req.query || {};
+
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch {
+      body = {};
+    }
+  }
+
+  // Combine query and body
+  const raw = { ...query, ...body };
+
+  // Determine if inner data object exists (KMSP response structure: { status: true, data: { status: 1, trx_id: ... } })
+  let data = raw;
+  if (raw.data && typeof raw.data === 'object' && !Array.isArray(raw.data)) {
+    data = raw.data;
+  } else if (raw.result && typeof raw.result === 'object' && !Array.isArray(raw.result)) {
+    data = raw.result;
+  } else if (raw.transaction && typeof raw.transaction === 'object' && !Array.isArray(raw.transaction)) {
+    data = raw.transaction;
+  }
+
+  // Extract trxId / refId
+  const trxId =
+    data.trx_id ||
+    data.trxId ||
+    data.trxid ||
+    data.transaction_id ||
+    data.ref_id ||
+    data.order_id ||
+    data.id_transaksi ||
+    raw.trx_id ||
+    raw.trxId ||
+    raw.trxid ||
+    raw.transaction_id ||
+    raw.ref_id ||
+    raw.order_id ||
+    query.trx_id ||
+    query.ref_id ||
+    null;
+
+  // Extract status (1 = sukses, 2 = pending, 0 = gagal)
+  let rawStatus = undefined;
+  if (data.status !== undefined && typeof data.status !== 'boolean') {
+    rawStatus = data.status;
+  } else if (raw.order_status !== undefined) {
+    rawStatus = raw.order_status;
+  } else if (data.order_status !== undefined) {
+    rawStatus = data.order_status;
+  } else if (raw.status !== undefined && typeof raw.status !== 'boolean') {
+    rawStatus = raw.status;
+  } else if (data.status !== undefined) {
+    rawStatus = data.status === true ? 1 : 0;
+  } else if (raw.status !== undefined) {
+    rawStatus = raw.status === true ? 1 : 0;
+  }
+
+  // Extract SN
+  const sn =
+    data.sn_only ||
+    data.sn_and_info ||
+    data.sn ||
+    data.serial_number ||
+    raw.sn_only ||
+    raw.sn_and_info ||
+    raw.sn ||
+    null;
+
+  // Extract Message
+  const message =
+    data.rc_message ||
+    data.message ||
+    data.rc_desc ||
+    data.note ||
+    raw.rc_message ||
+    raw.message ||
+    null;
+
+  return {
+    raw,
+    data,
+    trxId: trxId ? String(trxId).trim() : null,
+    status: rawStatus,
+    sn: sn ? String(sn).trim() : null,
+    message: message ? String(message).trim() : null,
+  };
 };
 
 const applyKmspTransactionStatusUpdate = async (connection, transaction, kmspData, fullResponse = null) => {
   const newStatus = mapKmspStatus(kmspData.status);
   const oldStatus = transaction.status;
-  const sn = kmspData.sn_only || kmspData.sn_and_info || transaction.sn || kmspData.trx_id || null;
-  const message = kmspData.rc_message || kmspData.message || transaction.message || null;
+  const sn = kmspData.sn_only || kmspData.sn_and_info || kmspData.sn || kmspData.serial_number || transaction.sn || null;
+  const message = kmspData.rc_message || kmspData.message || kmspData.note || kmspData.rc_desc || transaction.message || null;
   const responseJson = JSON.stringify(fullResponse || kmspData);
+
+  // Jika transaksi sudah final (sukses atau gagal), jangan revert kembali ke pending
+  if ((oldStatus === 'success' || oldStatus === 'failed') && newStatus === 'pending') {
+    return { oldStatus, newStatus: oldStatus, sn, message, refunded: false, balanceAfter: null };
+  }
 
   await connection.execute(
     `UPDATE transactions SET status = ?, sn = ?, message = ?, digiflazz_response = ?, updated_at = NOW() WHERE id = ?`,
@@ -1146,6 +1247,7 @@ const initDatabase = async () => {
       { key: 'kmsp_base_url', val: process.env.KMSP_BASE_URL || 'https://my.kmsp-store.com' },
       { key: 'kmsp_enable_member', val: 'false' },
       { key: 'kmsp_enable_reseller', val: 'false' },
+      { key: 'kmsp_webhook_secret', val: process.env.KMSP_WEBHOOK_SECRET || '' },
     ];
     for (const item of kmspDefaults) {
       const [existing] = await connection.query(
@@ -3710,12 +3812,14 @@ const getKmspConfig = async () => {
   const baseUrl = await getSetting('kmsp_base_url', KMSP_DEFAULT_BASE_URL);
   const enableMemberStr = await getSetting('kmsp_enable_member', 'false');
   const enableResellerStr = await getSetting('kmsp_enable_reseller', 'false');
+  const webhookSecret = await getSetting('kmsp_webhook_secret', process.env.KMSP_WEBHOOK_SECRET || '');
 
   return {
     apiKey: apiKey || KMSP_DEFAULT_API_KEY,
     baseUrl: baseUrl || KMSP_DEFAULT_BASE_URL,
     enableMember: enableMemberStr === 'true',
     enableReseller: enableResellerStr === 'true',
+    webhookSecret: webhookSecret || '',
   };
 };
 
@@ -4208,11 +4312,15 @@ app.get('/api/kmsp/settings', authenticate, async (req, res) => {
         can_access_admin_tools: canAccessAdmin,
         enable_member: config.enableMember,
         enable_reseller: config.enableReseller,
+        webhook_url: '/api/webhooks/kmsp',
+        callback_url: '/api/callback/kmsp',
         ...(isOwnerOrAdmin
           ? {
             has_api_key: Boolean(config.apiKey),
             api_key_masked: maskSecretKey(config.apiKey),
             base_url: config.baseUrl,
+            has_webhook_secret: Boolean(config.webhookSecret),
+            webhook_secret_masked: maskSecretKey(config.webhookSecret),
           }
           : {}),
       },
@@ -4225,7 +4333,7 @@ app.get('/api/kmsp/settings', authenticate, async (req, res) => {
 
 app.put('/api/kmsp/settings', authenticate, authorize('owner', 'admin'), async (req, res) => {
   try {
-    const { api_key, enable_member, enable_reseller, base_url } = req.body;
+    const { api_key, enable_member, enable_reseller, base_url, webhook_secret } = req.body;
 
     if (api_key !== undefined && !isMaskedOrEmpty(api_key)) {
       await setSetting('kmsp_api_key', String(api_key).trim(), req.user.id);
@@ -4240,6 +4348,9 @@ app.put('/api/kmsp/settings', authenticate, authorize('owner', 'admin'), async (
     if (enable_reseller !== undefined) {
       const val = enable_reseller === true || enable_reseller === 'true' || enable_reseller === 1 ? 'true' : 'false';
       await setSetting('kmsp_enable_reseller', val, req.user.id);
+    }
+    if (webhook_secret !== undefined && !isMaskedOrEmpty(webhook_secret)) {
+      await setSetting('kmsp_webhook_secret', String(webhook_secret).trim(), req.user.id);
     }
 
     const updated = await getKmspConfig();
@@ -4261,6 +4372,10 @@ app.put('/api/kmsp/settings', authenticate, authorize('owner', 'admin'), async (
         base_url: updated.baseUrl,
         enable_member: updated.enableMember,
         enable_reseller: updated.enableReseller,
+        has_webhook_secret: Boolean(updated.webhookSecret),
+        webhook_secret_masked: maskSecretKey(updated.webhookSecret),
+        webhook_url: '/api/webhooks/kmsp',
+        callback_url: '/api/callback/kmsp',
         can_access_admin_tools: true,
       },
     });
@@ -4407,9 +4522,9 @@ app.post('/api/kmsp/execute', authenticate, async (req, res) => {
           ]
         );
 
-        const trxId = kmspResult.data?.trx_id || generateRefId();
-        const initialStatus = kmspResult.data?.status === 1 ? 'success' : 'pending';
-        const sn = kmspResult.data?.sn_only || kmspResult.data?.trx_id || null;
+        const trxId = kmspResult.data?.trx_id || kmspResult.raw?.data?.trx_id || kmspResult.data?.ref_id || generateRefId();
+        const initialStatus = mapKmspStatus(kmspResult.data?.status);
+        const sn = kmspResult.data?.sn_only || kmspResult.data?.sn_and_info || kmspResult.data?.sn || null;
         const msg = kmspResult.message || 'Transaksi berhasil diajukan ke KMSP';
 
         await connection.execute(
@@ -4517,6 +4632,157 @@ app.post('/api/kmsp/execute', authenticate, async (req, res) => {
   }
 });
 
+// ─── KMSP Store Webhook / Callback Handler ───────────────────────────────────
+// Daftarkan URL ini di panel KMSP / CS KMSP untuk auto update status order paket:
+// Production URL: https://api.dzaqilah-store.my.id/api/webhooks/kmsp
+// Aliases: /webhooks/kmsp, /api/callback/kmsp, /callback/kmsp
+// Format response KMSP didukung:
+// 1. { "trx_id": "...", "status": 1, "sn_only": "...", "rc_message": "..." }
+// 2. { "status": true, "statusCode": 200, "data": { "trx_id": "...", "status": 1, "sn_only": "..." } }
+// 3. Query params: ?trx_id=...&status=1&sn=...
+
+const handleKmspWebhook = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { raw, data, trxId, status, sn, message } = parseKmspPayload(req);
+
+    // Jika request GET tanpa parameter (biasanya cek koneksi browser atau healthcheck)
+    if (!trxId) {
+      if (req.method === 'GET' && Object.keys(req.query || {}).length === 0) {
+        return res.status(200).json({
+          ok: true,
+          status: true,
+          statusCode: 200,
+          message: 'KMSP Callback / Webhook endpoint aktif dan siap menerima notifikasi order paket.',
+          endpoint: '/api/webhooks/kmsp',
+          supported_methods: ['POST', 'GET'],
+        });
+      }
+
+      console.warn('[kmsp-webhook] trx_id atau ref_id tidak ditemukan:', JSON.stringify(raw));
+      return res.status(400).json({
+        ok: false,
+        status: false,
+        statusCode: 400,
+        message: 'trx_id atau ref_id tidak ditemukan dalam payload callback KMSP',
+      });
+    }
+
+    // Optional API Key check jika dikirimkan oleh KMSP
+    const config = await getKmspConfig();
+    const providedKey =
+      req.headers['x-api-key'] ||
+      req.headers['api-key'] ||
+      req.headers['x-kmsp-key'] ||
+      req.query.api_key ||
+      data.api_key ||
+      raw.api_key;
+    if (providedKey && config.apiKey && providedKey !== config.apiKey) {
+      console.warn(`[kmsp-webhook] Warning: provided api_key (${providedKey}) tidak sama dengan server config`);
+    }
+
+    await connection.beginTransaction();
+
+    // 1. Cari transaksi berdasarkan ref_id
+    let [rows] = await connection.execute(
+      'SELECT * FROM transactions WHERE ref_id = ? FOR UPDATE',
+      [trxId]
+    );
+
+    // 2. Fallback pencarian untuk transaksi tipe kmsp jika ID berformat berbeda
+    if (!rows.length) {
+      [rows] = await connection.execute(
+        'SELECT * FROM transactions WHERE transaction_type = "kmsp" AND (sn = ? OR ref_id LIKE ?) FOR UPDATE',
+        [trxId, `%${trxId}%`]
+      );
+    }
+
+    if (!rows.length) {
+      await connection.commit();
+      console.log(`[kmsp-webhook] trx_id=${trxId} — transaksi tidak ditemukan di database`);
+      return res.status(200).json({
+        ok: true,
+        status: true,
+        statusCode: 200,
+        message: `Transaksi dengan ID ${trxId} tidak ditemukan`,
+        trx_id: trxId,
+      });
+    }
+
+    const transaction = rows[0];
+
+    const kmspDataForUpdate = {
+      status: status !== undefined ? status : data.status,
+      sn_only: sn || data.sn_only || data.sn,
+      sn_and_info: data.sn_and_info,
+      rc_message: message || data.rc_message || data.message,
+      trx_id: trxId,
+    };
+
+    const result = await applyKmspTransactionStatusUpdate(
+      connection,
+      transaction,
+      kmspDataForUpdate,
+      raw
+    );
+
+    await connection.commit();
+
+    if (result.refunded) {
+      await logActivity(
+        transaction.user_id,
+        'transaction_refund',
+        `Refund otomatis transaksi gagal KMSP ${transaction.ref_id} (callback)`,
+        { refId: transaction.ref_id, amount: transaction.selling_price, source: 'kmsp_callback' },
+        req.ip
+      );
+    }
+
+    if (result.oldStatus !== result.newStatus) {
+      await logActivity(
+        transaction.user_id,
+        'transaction_status_update',
+        `Status transaksi KMSP ${transaction.ref_id}: ${result.oldStatus} → ${result.newStatus} (callback)`,
+        { refId: transaction.ref_id, source: 'kmsp_callback', status: result.newStatus },
+        req.ip
+      );
+    }
+
+    console.log(`[kmsp-webhook] trx_id=${trxId} ${result.oldStatus} → ${result.newStatus} (refunded: ${result.refunded})`);
+
+    return res.status(200).json({
+      ok: true,
+      success: true,
+      status: true,
+      statusCode: 200,
+      message: 'Callback status KMSP berhasil diproses',
+      data: {
+        trx_id: trxId,
+        ref_id: transaction.ref_id,
+        status: result.newStatus,
+        old_status: result.oldStatus,
+        sn: result.sn,
+        message: result.message,
+        refunded: result.refunded,
+      },
+    });
+  } catch (err) {
+    await connection.rollback();
+    console.error('[kmsp-webhook] Error processing callback:', err);
+    return res.status(500).json({
+      ok: false,
+      status: false,
+      statusCode: 500,
+      message: `Internal server error: ${err.message}`,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+app.post(['/api/webhooks/kmsp', '/webhooks/kmsp', '/api/callback/kmsp', '/callback/kmsp'], handleKmspWebhook);
+app.get(['/api/webhooks/kmsp', '/webhooks/kmsp', '/api/callback/kmsp', '/callback/kmsp'], handleKmspWebhook);
+
 // ─── Provider Management (Digiflazz & KMSP API Keys) ──────────────────────
 
 app.get('/api/settings/providers', authenticate, authorize('owner'), async (req, res) => {
@@ -4541,6 +4807,10 @@ app.get('/api/settings/providers', authenticate, authorize('owner'), async (req,
           base_url: kmspConfig.baseUrl,
           enable_member: kmspConfig.enableMember,
           enable_reseller: kmspConfig.enableReseller,
+          has_webhook_secret: Boolean(kmspConfig.webhookSecret),
+          webhook_secret_masked: maskSecretKey(kmspConfig.webhookSecret),
+          webhook_url: '/api/webhooks/kmsp',
+          callback_url: '/api/callback/kmsp',
         },
       },
     });
@@ -4561,6 +4831,7 @@ app.put('/api/settings/providers', authenticate, authorize('owner'), async (req,
       kmsp_base_url,
       kmsp_enable_member,
       kmsp_enable_reseller,
+      kmsp_webhook_secret,
     } = req.body;
 
     let digiflazzChanged = false;
@@ -4596,6 +4867,9 @@ app.put('/api/settings/providers', authenticate, authorize('owner'), async (req,
     if (kmsp_enable_reseller !== undefined) {
       const val = kmsp_enable_reseller === true || kmsp_enable_reseller === 'true' || kmsp_enable_reseller === 1 ? 'true' : 'false';
       await setSetting('kmsp_enable_reseller', val, req.user.id);
+    }
+    if (kmsp_webhook_secret !== undefined && !isMaskedOrEmpty(kmsp_webhook_secret)) {
+      await setSetting('kmsp_webhook_secret', String(kmsp_webhook_secret).trim(), req.user.id);
     }
 
     if (digiflazzChanged) {
@@ -4638,6 +4912,10 @@ app.put('/api/settings/providers', authenticate, authorize('owner'), async (req,
           base_url: kmspConfig.baseUrl,
           enable_member: kmspConfig.enableMember,
           enable_reseller: kmspConfig.enableReseller,
+          has_webhook_secret: Boolean(kmspConfig.webhookSecret),
+          webhook_secret_masked: maskSecretKey(kmspConfig.webhookSecret),
+          webhook_url: '/api/webhooks/kmsp',
+          callback_url: '/api/callback/kmsp',
         },
       },
     });

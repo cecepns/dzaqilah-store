@@ -116,7 +116,19 @@ const Transactions = () => {
               <div key={tx.id} className="bg-white border rounded-xl p-4 overflow-hidden shadow-xs hover:border-gray-300 transition-colors">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-gray-900 text-sm break-words">{tx.product_name}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-medium text-gray-900 text-sm break-words">{tx.product_name}</p>
+                      {tx.transaction_type === 'kmsp' && (
+                        <span className="text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-1.5 py-0.2 rounded-md">
+                          DZ STORE
+                        </span>
+                      )}
+                      {tx.transaction_type === 'pasca' && (
+                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded-md">
+                          Pascabayar
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 font-mono mt-0.5 break-all">{tx.customer_no}</p>
                   </div>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 whitespace-nowrap ${statusColors[tx.status]}`}>

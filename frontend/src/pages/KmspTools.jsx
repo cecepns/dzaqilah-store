@@ -26,6 +26,7 @@ import {
   ShoppingCart,
   Copy,
   Sparkles,
+  Webhook,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Header from '../components/layout/Header';
@@ -33,7 +34,7 @@ import Modal from '../components/ui/Modal';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 import { get, post, put, getErrorMessage } from '../utils/request';
-import { API_ENDPOINTS } from '../utils/endpoints';
+import { API_BASE_URL, API_ENDPOINTS } from '../utils/endpoints';
 
 const KmspTools = () => {
   const navigate = useNavigate();
@@ -61,6 +62,31 @@ const KmspTools = () => {
   const [savedAuthId, setSavedAuthId] = useState(() => localStorage.getItem('kmsp_auth_id') || '');
   const [savedAccessToken, setSavedAccessToken] = useState(() => localStorage.getItem('kmsp_access_token') || '');
   const [savedPhone, setSavedPhone] = useState(() => localStorage.getItem('kmsp_phone') || '');
+
+  // Computed KMSP callback/webhook URL
+  const kmspCallbackUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const base = (API_BASE_URL && API_BASE_URL.startsWith('http'))
+      ? API_BASE_URL
+      : `${window.location.origin}${API_BASE_URL?.startsWith('/') ? '' : '/'}${API_BASE_URL || 'api'}`;
+    return `${base.replace(/\/+$/, '')}${API_ENDPOINTS.KMSP.WEBHOOK}`;
+  }, []);
+
+  const handleCopyCallbackUrl = () => {
+    if (!kmspCallbackUrl) return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(kmspCallbackUrl);
+      toast.success('URL Callback KMSP berhasil disalin!');
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = kmspCallbackUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      toast.success('URL Callback KMSP berhasil disalin!');
+    }
+  };
 
   // Action result modal
   const [resultModal, setResultModal] = useState({
@@ -1378,6 +1404,53 @@ const KmspTools = () => {
                     Simpan API Key
                   </button>
                 </div>
+
+                {/* Webhook / Callback URL KMSP */}
+                <div className="p-3.5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200/90 space-y-2.5 pt-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Webhook className="w-4 h-4 text-blue-700" />
+                      <span className="text-xs font-bold text-blue-950">URL Callback / Webhook KMSP</span>
+                    </div>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                      Auto Update Realtime
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-blue-900 leading-relaxed">
+                    Daftarkan URL callback ini di sistem atau CS KMSP agar status order paket otomatis terupdate realtime saat Sukses atau Gagal (termasuk auto refund saldo jika gagal).
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={kmspCallbackUrl}
+                      className="flex-1 text-xs font-mono p-2.5 rounded-xl border border-blue-300 bg-white text-gray-800 select-all font-semibold"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyCallbackUrl}
+                      className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 transition-all"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Salin URL
+                    </button>
+                  </div>
+                  <div className="bg-white/90 p-2.5 rounded-lg border border-blue-100 text-[11px] text-gray-700 space-y-1">
+                    <p className="font-bold text-gray-900 text-xs flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      Format Respon Callback Sesuai Detail Transaksi KMSP:
+                    </p>
+                    <p className="font-mono text-[10px] text-gray-600 pl-4.5">
+                      • Status <strong className="text-emerald-600">1</strong> = Sukses / Berhasil
+                    </p>
+                    <p className="font-mono text-[10px] text-gray-600 pl-4.5">
+                      • Status <strong className="text-amber-600">2</strong> = Pending / Dalam Proses
+                    </p>
+                    <p className="font-mono text-[10px] text-gray-600 pl-4.5">
+                      • Status <strong className="text-red-600">0</strong> = Gagal (Saldo otomatis dikembalikan)
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1494,7 +1567,7 @@ const KmspTools = () => {
                 </button>
               </div>
               <p className="text-[11px] text-teal-900 leading-relaxed">
-                Transaksi ini telah otomatis tercatat di <strong>Riwayat Transaksi</strong> akun Anda. Jika transaksi masih pending, Anda dapat menekan tombol <strong>Cek Status</strong> di riwayat transaksi untuk sinkronisasi.
+                Transaksi ini telah otomatis tercatat di <strong>Riwayat Transaksi</strong> akun Anda. Status pesanan akan terupdate otomatis via <strong>Callback KMSP</strong> secara realtime, atau Anda dapat menekan tombol <strong>Cek Status</strong> di riwayat transaksi untuk sinkronisasi manual.
               </p>
               <button
                 type="button"

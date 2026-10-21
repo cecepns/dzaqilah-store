@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import {
   KeyRound,
@@ -15,11 +15,13 @@ import {
   ShieldCheck,
   Info,
   Lock,
+  Webhook,
+  Copy,
 } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { get, put, post, getErrorMessage } from '../../utils/request';
-import { API_ENDPOINTS } from '../../utils/endpoints';
+import { API_BASE_URL, API_ENDPOINTS } from '../../utils/endpoints';
 import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom';
 
@@ -35,6 +37,7 @@ const ApiSettings = () => {
   const [showDigiflazzKey, setShowDigiflazzKey] = useState(false);
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [showKmspKey, setShowKmspKey] = useState(false);
+  const [showKmspWebhookSecret, setShowKmspWebhookSecret] = useState(false);
 
   // Stored status from server (masked for security)
   const [serverStatus, setServerStatus] = useState({
@@ -47,6 +50,8 @@ const ApiSettings = () => {
     kmsp: {
       has_api_key: false,
       api_key_masked: '',
+      has_webhook_secret: false,
+      webhook_secret_masked: '',
     },
   });
 
@@ -64,7 +69,33 @@ const ApiSettings = () => {
     base_url: 'https://my.kmsp-store.com',
     enable_member: false,
     enable_reseller: false,
+    webhook_secret: '',
   });
+
+  // Computed KMSP Callback URL
+  const kmspCallbackUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const base = (API_BASE_URL && API_BASE_URL.startsWith('http'))
+      ? API_BASE_URL
+      : `${window.location.origin}${API_BASE_URL?.startsWith('/') ? '' : '/'}${API_BASE_URL || 'api'}`;
+    return `${base.replace(/\/+$/, '')}${API_ENDPOINTS.KMSP.WEBHOOK}`;
+  }, []);
+
+  const handleCopyKmspCallbackUrl = () => {
+    if (!kmspCallbackUrl) return;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(kmspCallbackUrl);
+      toast.success('URL Callback KMSP berhasil disalin!');
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = kmspCallbackUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      toast.success('URL Callback KMSP berhasil disalin!');
+    }
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -95,6 +126,8 @@ const ApiSettings = () => {
             kmsp: {
               has_api_key: Boolean(kmsp.has_api_key),
               api_key_masked: kmsp.api_key_masked || '',
+              has_webhook_secret: Boolean(kmsp.has_webhook_secret),
+              webhook_secret_masked: kmsp.webhook_secret_masked || '',
             },
           }));
           setKmspForm({
@@ -102,6 +135,7 @@ const ApiSettings = () => {
             base_url: kmsp.base_url || 'https://my.kmsp-store.com',
             enable_member: Boolean(kmsp.enable_member),
             enable_reseller: Boolean(kmsp.enable_reseller),
+            webhook_secret: '',
           });
         }
       }
@@ -188,6 +222,9 @@ const ApiSettings = () => {
       if (kmspForm.api_key.trim()) {
         payload.kmsp_api_key = kmspForm.api_key.trim();
       }
+      if (kmspForm.webhook_secret.trim()) {
+        payload.kmsp_webhook_secret = kmspForm.webhook_secret.trim();
+      }
 
       const res = await put(API_ENDPOINTS.SETTINGS.PROVIDERS, payload);
       if (res?.data?.kmsp) {
@@ -196,11 +233,14 @@ const ApiSettings = () => {
           kmsp: {
             has_api_key: Boolean(res.data.kmsp.has_api_key),
             api_key_masked: res.data.kmsp.api_key_masked || '',
+            has_webhook_secret: Boolean(res.data.kmsp.has_webhook_secret),
+            webhook_secret_masked: res.data.kmsp.webhook_secret_masked || '',
           },
         }));
         setKmspForm((prev) => ({
           ...prev,
           api_key: '',
+          webhook_secret: '',
         }));
       }
 
@@ -552,6 +592,84 @@ const ApiSettings = () => {
                     {serverStatus.kmsp.has_api_key
                       ? 'Kunci API DZ STORE tersimpan aman di server database. Ketik kunci baru hanya jika Anda ingin memperbarui.'
                       : 'Kunci rahasia API provider untuk transaksi dan cek kuota/saldo.'}
+                  </p>
+                </div>
+
+                {/* Webhook / Callback URL KMSP */}
+                <div className="p-3.5 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 rounded-xl border border-blue-200/90 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Webhook className="w-4 h-4 text-blue-700" />
+                      <span className="text-xs font-bold text-blue-950">URL Callback / Webhook KMSP</span>
+                    </div>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                      Otomatis
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-blue-800 leading-relaxed">
+                    Daftarkan URL callback ini di panel KMSP / CS KMSP agar status order paket otomatis terupdate secara realtime (termasuk auto refund saldo jika transaksi gagal).
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={kmspCallbackUrl}
+                      className="flex-1 text-xs font-mono p-2.5 rounded-xl border border-blue-300 bg-white text-gray-800 select-all font-semibold"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyKmspCallbackUrl}
+                      className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95 transition-all"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Salin URL
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-600 font-mono">
+                    Menerima respon detail transaksi KMSP: Status 1 (Sukses), Status 2 (Pending), Status 0 (Gagal & Auto Refund).
+                  </p>
+                </div>
+
+                {/* Optional Webhook Secret */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Webhook Secret Key KMSP (Opsional)
+                    </label>
+                    {serverStatus.kmsp.has_webhook_secret ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <Lock className="w-3 h-3 text-emerald-600" />
+                        Tersimpan: {serverStatus.kmsp.webhook_secret_masked}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                        Belum diatur (opsional)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type={showKmspWebhookSecret ? 'text' : 'password'}
+                      value={kmspForm.webhook_secret}
+                      onChange={(e) => setKmspForm({ ...kmspForm, webhook_secret: e.target.value })}
+                      placeholder={
+                        serverStatus.kmsp.has_webhook_secret
+                          ? 'Kosongkan jika tidak ingin mengubah webhook secret tersimpan'
+                          : 'Kunci secret verifikasi webhook KMSP (jika ada)'
+                      }
+                      className="w-full px-3.5 py-2.5 pr-10 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono placeholder:text-gray-400 placeholder:text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKmspWebhookSecret(!showKmspWebhookSecret)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    >
+                      {showKmspWebhookSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Digunakan jika KMSP mengirimkan secret token pengaman pada request callback webhook.
                   </p>
                 </div>
 

@@ -127,6 +127,9 @@ ON DUPLICATE KEY UPDATE setting_key = setting_key;
 INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_enable_reseller', 'false')
 ON DUPLICATE KEY UPDATE setting_key = setting_key;
 
+INSERT INTO settings (setting_key, setting_value) VALUES ('kmsp_webhook_secret', '')
+ON DUPLICATE KEY UPDATE setting_key = setting_key;
+
 -- ─── 006: Product Margins (Per-Item Override) ─────────────────────────────
 
 CREATE TABLE IF NOT EXISTS product_margins (

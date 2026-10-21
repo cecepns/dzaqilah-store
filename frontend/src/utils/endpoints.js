@@ -80,6 +80,8 @@ export const API_ENDPOINTS = {
     SETTINGS: '/kmsp/settings',
     EXECUTE: '/kmsp/execute',
     PACKAGES: '/kmsp/packages',
+    WEBHOOK: '/webhooks/kmsp',
+    CALLBACK: '/callback/kmsp',
   },
 };
 
