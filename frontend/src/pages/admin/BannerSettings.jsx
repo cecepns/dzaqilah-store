@@ -94,8 +94,16 @@ const BannerSettings = () => {
     try {
       const res = await get(API_ENDPOINTS.SETTINGS.ANNOUNCEMENT);
       if (res?.data) {
-        setAnnouncementText(res.data.text || '');
-        setAnnouncementActive(Boolean(res.data.is_active));
+        const text = res.data.text ?? res.data.announcement_text ?? '';
+        const rawActive = res.data.is_active ?? res.data.announcement_active;
+        setAnnouncementText(text);
+        setAnnouncementActive(
+          rawActive === true ||
+          rawActive === 1 ||
+          rawActive === '1' ||
+          rawActive === 'true' ||
+          (rawActive === undefined && Boolean(text.trim()))
+        );
       }
     } catch (err) {
       toast.error(getErrorMessage(err));

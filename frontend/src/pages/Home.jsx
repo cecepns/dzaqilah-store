@@ -70,6 +70,19 @@ const DEFAULT_BANNERS = [
   },
 ];
 
+const parseAnnouncement = (data) => {
+  if (!data) return { text: '', isActive: false };
+  const text = (data.text ?? data.announcement_text ?? '').toString();
+  const rawActive = data.is_active ?? data.announcement_active;
+  const isActive =
+    rawActive === true ||
+    rawActive === 1 ||
+    rawActive === '1' ||
+    rawActive === 'true' ||
+    (rawActive === undefined && Boolean(text.trim()));
+  return { text, isActive };
+};
+
 const resolveImageUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -97,8 +110,8 @@ const Home = () => {
   // Banner & announcement dynamic states
   const [banners, setBanners] = useState(DEFAULT_BANNERS);
   const [announcement, setAnnouncement] = useState({
-    text: 'Selamat datang di Dzaqilah Cell! Layanan pulsa, paket data, & PPOB beroperasi 24 jam nonstop.',
-    isActive: true,
+    text: '',
+    isActive: false,
   });
 
   // Banner carousel state
@@ -116,9 +129,11 @@ const Home = () => {
   const fetchDashboardData = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [statsRes, servicesRes] = await Promise.all([
+      const [statsRes, servicesRes, announcementRes, bannersRes] = await Promise.all([
         get(API_ENDPOINTS.DASHBOARD.STATS).catch(() => ({ data: null })),
         get(API_ENDPOINTS.PRODUCTS.SERVICES).catch(() => ({ data: [] })),
+        get(API_ENDPOINTS.SETTINGS.ANNOUNCEMENT).catch(() => null),
+        get(API_ENDPOINTS.BANNERS.LIST).catch(() => null),
         refreshProfile().catch(() => null),
       ]);
 
@@ -129,6 +144,12 @@ const Home = () => {
           map[item.id] = item.total;
         });
         setServiceCounts(map);
+      }
+      if (announcementRes?.data) {
+        setAnnouncement(parseAnnouncement(announcementRes.data));
+      }
+      if (Array.isArray(bannersRes?.data) && bannersRes.data.length > 0) {
+        setBanners(bannersRes.data);
       }
 
       if (isManual) {
@@ -149,27 +170,6 @@ const Home = () => {
     // Fetch contact info
     get(API_ENDPOINTS.SETTINGS.CONTACT)
       .then((res) => setContactData(res.data))
-      .catch(() => { });
-
-    // Fetch dynamic banners
-    get(API_ENDPOINTS.BANNERS.LIST)
-      .then((res) => {
-        if (Array.isArray(res?.data) && res.data.length > 0) {
-          setBanners(res.data);
-        }
-      })
-      .catch(() => { });
-
-    // Fetch dynamic announcement
-    get(API_ENDPOINTS.SETTINGS.ANNOUNCEMENT)
-      .then((res) => {
-        if (res?.data) {
-          setAnnouncement({
-            text: res.data.announcement_text || '',
-            isActive: Boolean(res.data.announcement_active),
-          });
-        }
-      })
       .catch(() => { });
   }, []);
 
@@ -255,8 +255,11 @@ const Home = () => {
                 title="Papan Pengumuman & Notifikasi"
               >
                 <Bell className="w-4 h-4" />
-                {announcement?.isActive && announcement?.text?.trim() && (
-                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-400 ring-2 ring-teal-800" />
+                {announcement?.isActive && Boolean(announcement?.text?.trim()) && (
+                  <span className="absolute top-1 right-1 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500 ring-2 ring-teal-800" />
+                  </span>
                 )}
               </button>
             </div>
@@ -302,8 +305,12 @@ const Home = () => {
         </div>
 
         {/* ─── Running Announcement Ticker (Marquee Strip) ─── */}
-        {announcement?.isActive && announcement?.text && (
-          <div className="bg-teal-900/90 py-1 px-3 border-t border-teal-800/80 flex items-center gap-2 overflow-hidden text-[11px] text-teal-100 font-medium">
+        {announcement?.isActive && Boolean(announcement?.text?.trim()) && (
+          <div
+            onClick={() => setIsNotificationOpen(true)}
+            className="bg-teal-900/90 py-1.5 px-3 border-t border-teal-800/80 flex items-center gap-2 overflow-hidden text-[11px] text-teal-100 font-medium cursor-pointer hover:bg-teal-950 transition-colors select-none"
+            title="Klik untuk baca papan pengumuman lengkap"
+          >
             <div className="flex-shrink-0 flex items-center gap-1 text-orange-300 font-bold bg-teal-800/80 px-1.5 py-0.5 rounded text-[10px]">
               <Megaphone className="w-3 h-3 text-orange-400" />
               <span>INFO</span>

@@ -3756,11 +3756,14 @@ app.get('/api/settings/announcement', async (req, res) => {
       'Selamat datang di Dzaqilah Cell! Layanan pulsa, paket data, & PPOB beroperasi 24 jam nonstop. Deposit instan otomatis via QRIS. Hubungi CS jika ada kendala.'
     );
     const activeStr = await getSetting('announcement_active', 'true');
+    const isActive = activeStr === 'true';
     res.json({
       success: true,
       data: {
         text,
-        is_active: activeStr === 'true',
+        is_active: isActive,
+        announcement_text: text,
+        announcement_active: isActive,
       },
     });
   } catch (err) {
@@ -3788,12 +3791,15 @@ app.put('/api/settings/announcement', authenticate, authorize('owner', 'admin'),
       req.ip
     );
 
+    const isActive = activeVal === 'true';
     res.json({
       success: true,
       message: 'Papan pengumuman berhasil disimpan',
       data: {
         text: cleanText,
-        is_active: activeVal === 'true',
+        is_active: isActive,
+        announcement_text: cleanText,
+        announcement_active: isActive,
       },
     });
   } catch (err) {
