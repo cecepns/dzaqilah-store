@@ -12,9 +12,12 @@ export const post = async (url, data = {}) => {
 };
 
 export const postForm = async (url, formData) => {
-  const response = await api.post(url, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post(url, formData);
+  return response.data;
+};
+
+export const putForm = async (url, formData) => {
+  const response = await api.put(url, formData);
   return response.data;
 };
 

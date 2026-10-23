@@ -107,11 +107,40 @@ const bannerStorage = multer.diskStorage({
   },
 });
 
+const bannerUploadFilter = (req, file, cb) => {
+  if (file.mimetype && file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Format file tidak didukung! Hanya file gambar (JPG, PNG, WEBP, GIF) yang diperbolehkan.'), false);
+  }
+};
+
 const uploadBannerImage = multer({
   storage: bannerStorage,
-  fileFilter: topupUploadFilter,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB safety limit
+  fileFilter: bannerUploadFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB safety limit
 });
+
+const bannerUploadMiddleware = (req, res, next) => {
+  uploadBannerImage.fields([
+    { name: 'image', maxCount: 1 },
+    { name: 'file', maxCount: 1 },
+    { name: 'banner', maxCount: 1 },
+  ])(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ success: false, message: 'Ukuran file gambar banner maksimal 5MB' });
+      }
+      return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file banner' });
+    }
+    if (req.files) {
+      if (req.files.image && req.files.image[0]) req.file = req.files.image[0];
+      else if (req.files.file && req.files.file[0]) req.file = req.files.file[0];
+      else if (req.files.banner && req.files.banner[0]) req.file = req.files.banner[0];
+    }
+    next();
+  });
+};
 
 // Konfigurasi Multer untuk Gambar / QRIS Rekening Pembayaran
 const paymentAccountStorage = multer.diskStorage({
@@ -3311,7 +3340,7 @@ app.get('/api/banners', async (req, res) => {
   }
 });
 
-app.post('/api/banners', authenticate, authorize('owner', 'admin'), uploadBannerImage.single('image'), async (req, res) => {
+app.post('/api/banners', authenticate, authorize('owner', 'admin'), bannerUploadMiddleware, async (req, res) => {
   let connection;
   try {
     const { title, description, badge, action_url, sort_order } = req.body;
@@ -3321,11 +3350,31 @@ app.post('/api/banners', authenticate, authorize('owner', 'admin'), uploadBanner
     let image_url = '';
     if (req.file) {
       image_url = `/uploads/banners/${req.file.filename}`;
-    } else if (req.body.image_url) {
+    } else if (req.body.image && typeof req.body.image === 'string' && req.body.image.startsWith('data:image/')) {
+      try {
+        const matches = req.body.image.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1].toLowerCase();
+          const ext = rawExt === 'jpeg' ? '.jpg' : `.${rawExt.split('+')[0]}`;
+          const base64Data = matches[2];
+          const filename = `banner-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+          const filePath = path.join(bannersUploadDir, filename);
+          fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+          image_url = `/uploads/banners/${filename}`;
+        }
+      } catch (e) {
+        console.error('Failed to parse base64 banner image:', e.message);
+      }
+    } else if (req.body.image_url && typeof req.body.image_url === 'string') {
       image_url = req.body.image_url.trim();
+    } else if (req.body.image && typeof req.body.image === 'string' && (req.body.image.startsWith('http://') || req.body.image.startsWith('https://') || req.body.image.startsWith('/'))) {
+      image_url = req.body.image.trim();
     }
 
     if (!image_url) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+      }
       return res.status(400).json({ success: false, message: 'File gambar banner wajib diunggah' });
     }
 
@@ -3359,6 +3408,9 @@ app.post('/api/banners', authenticate, authorize('owner', 'admin'), uploadBanner
 
     res.status(201).json({ success: true, message: 'Banner berhasil ditambahkan', data: newBanner[0] });
   } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
     console.error('Create banner error:', err.message);
     res.status(500).json({ success: false, message: 'Gagal menambahkan banner' });
   } finally {
@@ -3366,7 +3418,7 @@ app.post('/api/banners', authenticate, authorize('owner', 'admin'), uploadBanner
   }
 });
 
-app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), uploadBannerImage.single('image'), async (req, res) => {
+app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), bannerUploadMiddleware, async (req, res) => {
   let connection;
   try {
     const id = parseInt(req.params.id, 10);
@@ -3374,6 +3426,9 @@ app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), uploadBan
 
     const [existing] = await connection.query('SELECT * FROM banners WHERE id = ?', [id]);
     if (!existing.length) {
+      if (req.file && fs.existsSync(req.file.path)) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+      }
       return res.status(404).json({ success: false, message: 'Banner tidak ditemukan' });
     }
 
@@ -3401,8 +3456,31 @@ app.put('/api/banners/:id', authenticate, authorize('owner', 'admin'), uploadBan
           try { fs.unlinkSync(oldPath); } catch (_) { }
         }
       }
-    } else if (req.body.image_url) {
+    } else if (req.body.image && typeof req.body.image === 'string' && req.body.image.startsWith('data:image/')) {
+      try {
+        const matches = req.body.image.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1].toLowerCase();
+          const ext = rawExt === 'jpeg' ? '.jpg' : `.${rawExt.split('+')[0]}`;
+          const base64Data = matches[2];
+          const filename = `banner-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+          const filePath = path.join(bannersUploadDir, filename);
+          fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+          image_url = `/uploads/banners/${filename}`;
+          if (current.image_url && current.image_url.startsWith('/uploads/banners/')) {
+            const oldPath = path.join(uploadsRootDir, current.image_url.replace('/uploads/', ''));
+            if (fs.existsSync(oldPath)) {
+              try { fs.unlinkSync(oldPath); } catch (_) { }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse base64 banner image:', e.message);
+      }
+    } else if (req.body.image_url && typeof req.body.image_url === 'string') {
       image_url = req.body.image_url.trim();
+    } else if (req.body.image && typeof req.body.image === 'string' && (req.body.image.startsWith('http://') || req.body.image.startsWith('https://') || req.body.image.startsWith('/'))) {
+      image_url = req.body.image.trim();
     }
 
     await connection.query(
@@ -3561,9 +3639,16 @@ app.get('/api/admin/payment-accounts', authenticate, authorize('owner', 'admin')
 });
 
 app.post('/api/admin/payment-accounts', authenticate, authorize('owner', 'admin'), (req, res, next) => {
-  uploadPaymentAccountImage.single('qr_image')(req, res, (err) => {
+  uploadPaymentAccountImage.fields([
+    { name: 'qr_image', maxCount: 1 },
+    { name: 'image', maxCount: 1 },
+  ])(req, res, (err) => {
     if (err) {
       return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file gambar QRIS' });
+    }
+    if (req.files) {
+      if (req.files.qr_image && req.files.qr_image[0]) req.file = req.files.qr_image[0];
+      else if (req.files.image && req.files.image[0]) req.file = req.files.image[0];
     }
     next();
   });
@@ -3618,9 +3703,16 @@ app.post('/api/admin/payment-accounts', authenticate, authorize('owner', 'admin'
 });
 
 app.put('/api/admin/payment-accounts/:id', authenticate, authorize('owner', 'admin'), (req, res, next) => {
-  uploadPaymentAccountImage.single('qr_image')(req, res, (err) => {
+  uploadPaymentAccountImage.fields([
+    { name: 'qr_image', maxCount: 1 },
+    { name: 'image', maxCount: 1 },
+  ])(req, res, (err) => {
     if (err) {
       return res.status(400).json({ success: false, message: err.message || 'Gagal memproses file gambar QRIS' });
+    }
+    if (req.files) {
+      if (req.files.qr_image && req.files.qr_image[0]) req.file = req.files.qr_image[0];
+      else if (req.files.image && req.files.image[0]) req.file = req.files.image[0];
     }
     next();
   });

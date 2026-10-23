@@ -201,8 +201,9 @@ const BannerSettings = () => {
       data.append('is_active', String(formData.is_active));
       data.append('sort_order', String(formData.sort_order || 0));
 
-      if (compressedFile) {
-        data.append('image', compressedFile);
+      const fileToSend = compressedFile || selectedFile;
+      if (fileToSend) {
+        data.append('image', fileToSend);
       } else if (editingBanner?.image_url) {
         data.append('image_url', editingBanner.image_url);
       }
